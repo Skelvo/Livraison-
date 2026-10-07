@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
     if (body.action === "tick") {
       if (req.headers.get("x-cron-secret") !== cfg.cron_secret) return json({ error: "interdit" }, 403);
       const now = parisNow();
-      if (now.weekday === "Sun") return json({ skipped: "dimanche" });
+      if (now.weekday === "Sat" || now.weekday === "Sun") return json({ skipped: "week-end" });
       if (holidays(parseInt(now.date)).has(now.date)) return json({ skipped: "jour férié" });
 
       const schedule = await loadSchedule();

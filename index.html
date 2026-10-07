@@ -1152,7 +1152,7 @@ window.enableAlerts = async function() {
       (await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64urlToBytes(VAPID_PUBLIC)}));
     await savePushSubscription(sub);
     supaRpc('team_link_push', {p_device: getDeviceId(), p_endpoint: sub.endpoint}).catch(function(){});
-    setAlertUI(true, 'Tu recevras une alerte 5 min avant chaque départ (sauf le dimanche).');
+    setAlertUI(true, 'Tu recevras une alerte 5 min avant chaque départ (du lundi au vendredi).');
     // Notification de confirmation, pour vérifier tout de suite que ça marche
     fetch(PUSH_FN, {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({action: 'welcome', endpoint: sub.endpoint})}).catch(function(){});
