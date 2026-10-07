@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau des départs</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0e0c0c;
+  --surface: #1a1616;
+  --surface2: #221e1e;
+  --border: #332a2a;
+  --red: #e84040;
+  --orange: #f59020;
+  --green: #40d490;
+  --text: #f2eeee;
+  --muted: #7a6868;
+  --muted2: #4a3838;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+.wrap { max-width:760px; margin:0 auto; padding:0 16px 40px; }
+
+/* ── BARRE DU HAUT ── */
+.topbar {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:16px 0 14px; border-bottom:1px solid var(--border);
+}
+.topbar-title { font-family:'Bebas Neue',sans-serif; font-size:26px; letter-spacing:2px; }
+.topbar-date { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+.topbar-clock { font-family:'DM Mono',monospace; font-size:22px; font-weight:500; }
+.topbar-link {
+  font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px; color:var(--muted);
+  text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:6px 10px; white-space:nowrap;
+}
+.topbar-link:hover { color:var(--text); border-color:var(--muted); }
+
+/* ── PROCHAIN DÉPART ── */
+.next {
+  margin-top:18px; background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  padding:18px 18px 16px; cursor:pointer;
+}
+.next.soon { border-color:var(--orange); }
+.next.urgent { border-color:var(--red); animation:pulse 1.2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(232,64,64,.45)} 50%{box-shadow:0 0 0 8px rgba(232,64,64,0)} }
+.label { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; }
+.next-row { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-top:6px; flex-wrap:wrap; }
+.next-time { font-family:'Bebas Neue',sans-serif; font-size:72px; line-height:.9; letter-spacing:2px; }
+.next-cd { font-family:'Bebas Neue',sans-serif; font-size:40px; line-height:1; color:var(--green); letter-spacing:1px; }
+.next.soon .next-cd { color:var(--orange); }
+.next.urgent .next-cd { color:var(--red); }
+.next-who { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.next-garages { margin-top:12px; font-size:12px; color:var(--muted); }
+.next-done { font-family:'Bebas Neue',sans-serif; font-size:44px; letter-spacing:2px; margin-top:6px; }
+
+/* ── TRANSPORTEURS ── */
+.pill {
+  display:inline-block; font-size:12px; font-weight:600; padding:4px 10px; border-radius:20px; white-space:nowrap;
+}
+.pill-serge   { background:#3d1a18; color:#f07060; border:1px solid #5a2820; }
+.pill-lande   { background:#18263d; color:#6090f0; border:1px solid #20386a; }
+.pill-pb      { background:#18301f; color:#50d080; border:1px solid #205030; }
+.pill-bearn   { background:#3d2c10; color:#d09040; border:1px solid #5a4020; }
+.pill-hendaye { background:#2c1a3d; color:#9060e0; border:1px solid #40286a; }
+.pill-ace     { background:#2a2a2a; color:#c0c0c0; border:1px solid #444; }
+
+/* ── LISTE DES DÉPARTS ── */
+.section { margin-top:26px; }
+.section .label { margin-bottom:10px; display:flex; justify-content:space-between; }
+.dep {
+  background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden;
+}
+.dep-head {
+  display:grid; grid-template-columns:64px 1fr auto 18px; align-items:center; gap:10px;
+  padding:12px 14px; cursor:pointer; user-select:none;
+}
+.dep-time { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:1px; line-height:1; }
+.dep-mid { display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; }
+.dep-count { font-size:11px; color:var(--muted); font-family:'DM Mono',monospace; }
+.dep-cd { font-family:'DM Mono',monospace; font-size:13px; font-weight:500; color:var(--green); text-align:right; white-space:nowrap; }
+.dep.soon .dep-cd { color:var(--orange); }
+.dep.urgent { border-color:var(--red); }
+.dep.urgent .dep-cd { color:var(--red); }
+.dep-chev { color:var(--muted); font-size:11px; transition:transform .2s; }
+.dep.open .dep-chev { transform:rotate(180deg); }
+.dep-garages { display:none; padding:0 14px 14px; flex-wrap:wrap; gap:6px; }
+.dep.open .dep-garages { display:flex; }
+.garage {
+  font-size:12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:4px 8px;
+}
+.dep.past { opacity:.45; }
+.dep.past .dep-cd { color:var(--muted); }
+
+.past-toggle {
+  width:100%; background:none; border:1px dashed var(--border); border-radius:10px; color:var(--muted);
+  font-family:'DM Mono',monospace; font-size:11px; letter-spacing:2px; padding:10px; cursor:pointer;
+}
+#pastList { display:none; margin-top:8px; }
+#pastList.show { display:block; }
+.empty { color:var(--muted); font-size:13px; padding:8px 0; }
+
+@media (max-width:420px) {
+  .next-time { font-size:60px; }
+  .next-cd { font-size:32px; }
+  .topbar-title { font-size:22px; }
+  .dep-head { grid-template-columns:54px 1fr auto 14px; gap:8px; padding:10px 12px; }
+  .dep-time { font-size:24px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Départs du jour</div>
+      <div class="topbar-date" id="date"></div>
+    </div>
+    <div class="topbar-clock" id="clock">--:--:--</div>
+    <a class="topbar-link" href="index.html">🔍 GARAGE</a>
+  </div>
+
+  <div class="next" id="next" onclick="toggleNext()"></div>
+
+  <div class="section">
+    <div class="label"><span>Ensuite</span><span id="upcomingCount"></span></div>
+    <div id="upcomingList"></div>
+  </div>
+
+  <div class="section">
+    <button class="past-toggle" id="pastToggle" onclick="togglePast()"></button>
+    <div id="pastList"></div>
+  </div>
+
+</div>
+
+<script src="data.js"></script>
+<script>
+// Garages ajoutés ou modifiés depuis l'admin (même base que index.html)
+const SUPA_URL = 'https://aitbhskkwoqmoqfpogph.supabase.co';
+const SUPA_KEY = 'sb_publishable_84rSs3LwBpdWs4qbPd5zkA_dOh-ci4s';
+
+async function loadGaragesFromSupabase() {
+  try {
+    const res = await fetch(SUPA_URL + '/rest/v1/garages?select=name,carriers', {
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+    });
+    const data = await res.json();
+    if(!Array.isArray(data)) return;
+    data.forEach(function(row){
+      const carriers = JSON.parse(row.carriers);
+      const exists = GARAGES_DATA.find(function(g){ return g.g === row.name; });
+      if(exists) exists.carriers = carriers;
+      else GARAGES_DATA.push({ g: row.name, carriers: carriers });
+    });
+    GARAGES_DATA.sort(function(a,b){ return a.g.localeCompare(b.g); });
+    render();
+  } catch(e) { console.log('Supabase error:', e); }
+}
+
+// Helpers
+function parseTime(s){ const p = s.split('h'); return parseInt(p[0])*60 + parseInt(p[1]||0); }
+function nowMin(){ const n = new Date(); return n.getHours()*60 + n.getMinutes(); }
+function fmt(min){ return String(Math.floor(min/60)).padStart(2,'0') + 'h' + String(min%60).padStart(2,'0'); }
+function fmtCD(diff){
+  if(diff <= 0) return 'EN COURS';
+  if(diff < 60) return 'dans ' + diff + ' min';
+  return 'dans ' + Math.floor(diff/60) + 'h' + String(diff%60).padStart(2,'0');
+}
+function pill(cid){ return '<span class="pill pill-' + cid + '">' + CARRIERS[cid].label + '</span>'; }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+// Garages desservis par un transporteur à une heure précise
+function garagesFor(cid, time){
+  return GARAGES_DATA.filter(function(g){
+    return g.carriers.some(function(c){ return c.id === cid && c.deps.indexOf(time) !== -1; });
+  }).map(function(g){ return g.g; });
+}
+
+// Tous les départs de la journée, triés par heure
+function allDepartures(){
+  const list = [];
+  Object.keys(CARRIER_DEPS).forEach(function(cid){
+    CARRIER_DEPS[cid].forEach(function(time){
+      list.push({ key: cid + time, cid: cid, time: time, t: parseTime(time), garages: garagesFor(cid, time) });
+    });
+  });
+  return list.sort(function(a,b){ return a.t - b.t || CARRIERS[a.cid].label.localeCompare(CARRIERS[b.cid].label); });
+}
+
+function urgency(diff){ return diff <= 15 ? 'urgent' : diff <= 30 ? 'soon' : ''; }
+
+const open = new Set();
+let nextOpen = false, pastOpen = false;
+
+function depRow(d, now){
+  const diff = d.t - now;
+  const past = diff <= 0;
+  const cls = 'dep' + (past ? ' past' : ' ' + urgency(diff)) + (open.has(d.key) ? ' open' : '');
+  const garages = d.garages.length
+    ? d.garages.map(function(n){ return '<span class="garage">' + esc(n) + '</span>'; }).join('')
+    : '<span class="empty">Aucun garage enregistré sur ce départ</span>';
+  return '<div class="' + cls + '">' +
+    '<div class="dep-head" onclick="toggleDep(\'' + d.key + '\')">' +
+      '<div class="dep-time">' + d.time + '</div>' +
+      '<div class="dep-mid">' + pill(d.cid) + '<span class="dep-count">' + d.garages.length + ' garage' + (d.garages.length > 1 ? 's' : '') + '</span></div>' +
+      '<div class="dep-cd">' + (past ? 'Parti' : fmtCD(diff)) + '</div>' +
+      '<div class="dep-chev">▼</div>' +
+    '</div>' +
+    '<div class="dep-garages">' + garages + '</div>' +
+  '</div>';
+}
+
+function render(){
+  const now = nowMin();
+  const deps = allDepartures();
+  const upcoming = deps.filter(function(d){ return d.t > now; });
+  const past = deps.filter(function(d){ return d.t <= now; }).reverse();
+
+  // Prochain départ (tous les transporteurs qui partent à la même heure)
+  const nextEl = document.getElementById('next');
+  if(upcoming.length){
+    const first = upcoming.filter(function(d){ return d.t === upcoming[0].t; });
+    const diff = first[0].t - now;
+    const names = [];
+    first.forEach(function(d){ d.garages.forEach(function(n){ if(names.indexOf(n) === -1) names.push(n); }); });
+    nextEl.className = 'next ' + urgency(diff);
+    nextEl.innerHTML =
+      '<div class="label">Prochain départ</div>' +
+      '<div class="next-row"><div class="next-time">' + first[0].time + '</div><div class="next-cd">' + fmtCD(diff) + '</div></div>' +
+      '<div class="next-who">' + first.map(function(d){ return pill(d.cid); }).join('') + '</div>' +
+      '<div class="next-garages">' + (nextOpen
+        ? names.map(function(n){ return '<span class="garage" style="display:inline-block;margin:0 4px 4px 0">' + esc(n) + '</span>'; }).join('')
+        : names.length + ' garage' + (names.length > 1 ? 's' : '') + ' — toucher pour voir la liste') + '</div>';
+    upcoming.splice(0, first.length);
+  } else {
+    nextEl.className = 'next';
+    const firstTomorrow = deps[0];
+    nextEl.innerHTML =
+      '<div class="label">Prochain départ</div>' +
+      '<div class="next-done">Plus de départ aujourd’hui</div>' +
+      (firstTomorrow ? '<div class="next-garages">Demain : ' + firstTomorrow.time + ' — ' + CARRIERS[firstTomorrow.cid].label + '</div>' : '');
+  }
+
+  document.getElementById('upcomingCount').textContent = upcoming.length ? upcoming.length + ' départ' + (upcoming.length > 1 ? 's' : '') : '';
+  document.getElementById('upcomingList').innerHTML = upcoming.length
+    ? upcoming.map(function(d){ return depRow(d, now); }).join('')
+    : '<div class="empty">Rien d’autre aujourd’hui.</div>';
+
+  document.getElementById('pastToggle').textContent = (pastOpen ? '▲ MASQUER' : '▼ VOIR') + ' LES DÉPARTS PASSÉS (' + past.length + ')';
+  document.getElementById('pastToggle').style.display = past.length ? '' : 'none';
+  const pastEl = document.getElementById('pastList');
+  pastEl.className = pastOpen ? 'show' : '';
+  pastEl.innerHTML = past.map(function(d){ return depRow(d, now); }).join('');
+}
+
+function toggleDep(key){ open.has(key) ? open.delete(key) : open.add(key); render(); }
+function toggleNext(){ nextOpen = !nextOpen; render(); }
+function togglePast(){ pastOpen = !pastOpen; render(); }
+
+function renderClock(){
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    [n.getHours(), n.getMinutes(), n.getSeconds()].map(function(v){ return String(v).padStart(2,'0'); }).join(':');
+  document.getElementById('date').textContent =
+    n.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+}
+
+// Re-rendu à chaque changement de minute
+let lastMin = -1;
+setInterval(function(){
+  renderClock();
+  const m = nowMin();
+  if(m !== lastMin){ lastMin = m; render(); }
+}, 1000);
+
+renderClock();
+render();
+loadGaragesFromSupabase();
+</script>
+</body>
+</html>

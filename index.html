@@ -59,6 +59,21 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 }
 
 /* Heure en haut à droite, bien contrastée */
+.board-link {
+  display: block;
+  margin: 16px 20px 0;
+  padding: 14px;
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.board-link:hover { border-color: var(--accent); }
 .hero-clock {
   position: absolute;
   top: 18px; right: 20px;
@@ -773,6 +788,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
   </div>
 </div>
 
+<a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
+
 <div class="search-wrap">
   <div class="search-box">
     <span class="search-icon">🔍</span>
@@ -1005,305 +1022,8 @@ window.loadGaragesFromSupabase = async function() {
 };
 </script>
 
+<script src="data.js"></script>
 <script>
-const CARRIERS = {
-  serge:   { label: 'Serge' },
-  lande:   { label: 'Packeto Lande' },
-  pb:      { label: 'Packeto Pays Basque' },
-  bearn:   { label: 'Packeto Béarn' },
-  hendaye: { label: 'Packeto Hendaye' },
-  ace:     { label: 'ACE Hendaye' },
-};
-
-const CARRIER_DEPS = {
-  serge:   ['09h30','15h30'],
-  lande:   ['06h00','10h45','11h00','15h30'],
-  pb:      ['11h15','16h15','18h00'],
-  bearn:   ['11h00','15h30'],
-  hendaye: ['09h15','14h15'],
-  ace:     ['07h00','11h30'],
-};
-
-const GARAGES_DATA = [
-  // ── A ──
-  { g: 'ABL Automobile',              carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Adour Occasion',              carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'AG Auto 64',                  carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Agri Oto',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Aguer',                       carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Aguerre André (Irissarry)',   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Ahozteia',                    carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Alain EMP Parachou (Loubet)', carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Alfaro Mattin',               carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Alfaro Sébastien',            carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Ambulance Du Labourd',        carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Aquitaine Auto Béarn',        carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Arosteguy',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Arrayet Garage',              carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Arrieta (Station Elan)',      carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'ASF',                         carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Astigarage',                  carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'At Jardin',                   carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Atelier Du Bourriaou',        carriers: [{id:'bearn',deps:['11h00','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Atelier Garcia',              carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Atlantic Auto',               carriers: [{id:'lande',deps:['10h45','15h30']}] },
-  { g: 'Augaray (Roady)',             carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Autaa Levage (Artix)',        carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Auto Loisir',                 carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Auto Casse Du Labourd',       carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Auto Libier',                 carriers: [{id:'hendaye',deps:['09h15','14h15']}] },
-  { g: 'Auto Méca Concept',           carriers: [{id:'lande',deps:['06h00','11h00','15h30']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Auto Sport',                  carriers: [] },
-  { g: 'Autolan',                     carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Autovision',                  carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  // ── B ──
-  { g: 'Barbe Et Fils',               carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Barnetche',                   carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Bénat Lahirigoyen',           carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Berho',                       carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Berrouet',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Bidegaimberry',               carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Bildozeko',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Bittola',                     carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Bourriaou',                   carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Bug',                         carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  // ── C ──
-  { g: 'Canton',                      carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Capbreton Garage Service',    carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Carriquiry',                  carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Carrosserie Du 64',           carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Casse Auto Valade (EV)',      carriers: [{id:'lande',deps:['06h00']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Casse Auto Du Labourd',       carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Castera',                     carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Catelin',                     carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Cazauran',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Cebre Auto Bidassoa',         carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Chopin',                      carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Clean And Co',                carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'CN Auto',                     carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Colet',                       carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Commune De Maremne',          carriers: [{id:'lande',deps:['11h00']}] },
-  { g: 'Commune De Salies',           carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Coreba',                      carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Creacar (Ayherré)',           carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Creacar (Hasparren)',         carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Crosa St Jean De Luz',        carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Cruiser',                     carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Ctrl Technique Bonloc',       carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  // ── D ──
-  { g: 'Daguerre',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Dallard St Jean De Luz',      carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Dallard St Paul Les Dax',     carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Dartiguenave',                carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'DCI Event',                   carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Debussy',                     carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Dekra (Itxassou)',            carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Detcheverry',                 carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Div Bug',                     carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'DNL Auto',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Doucet',                      carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Douhry',                      carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Drop Loc',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'DSM Auto',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'DTH',                         carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Duhalde',                     carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Duhau (St Palais)',           carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Durruty (GSD)',               carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'DV Auto',                     carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Dirasse',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Landes Auto Remorques',      carriers: [{id:'lande',deps:['10h45','15h30']}] },
-  // ── E ──
-  { g: 'Eco Pneu',                    carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Egis Exploitation',           carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'EMP Lapurdi',                 carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Errobi Garage',               carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Espace Auto Landais',         carriers: [{id:'lande',deps:['06h00']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Essenjy',                     carriers: [{id:'lande',deps:['06h00','11h00','15h30']}] },
-  { g: 'Etchegaray (Hasparren)',      carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Etchegaray (Larressore)',     carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Etchegaray Guy (Itxassu)',    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Etchegoimberry',              carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Etchegoïn',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Etcheverry Garage',           carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'ETPM',                        carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Euromaster (St Palais)',      carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Europ Autosport',             carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'EV (Casse Auto Valade)',      carriers: [{id:'lande',deps:['06h00']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Evasion Marine',              carriers: [{id:'lande',deps:['10h45','15h30']}] },
-  { g: 'Eyheramouno',                 carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Ezpela',                      carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  // ── F ──
-  { g: 'Feu Vert Bidart',             carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Feu Vert Dax',               carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Feu Vert Hendaye',            carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Feu Vert St Jean',            carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Fix Auto',                    carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Frantxoa Maitia',             carriers: [{id:'serge',deps:['09h30','15h30']}] },
-  // ── G ──
-  { g: 'Garage De La Gare',          carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Garage De La Zone',          carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: "Garage De L'Avenue Hossegor",carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Garage De Maremne',          carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Garage Des Lacs',            carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Garage Du Canton',           carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Garage Du Rond Point',       carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Garage Du Seignanx',         carriers: [{id:'lande',deps:['06h00']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Garage Errobi',              carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Garauto',                    carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Garazi DTH',                 carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Gardères',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Gariador',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Gauyat',                     carriers: [{id:'lande',deps:['06h00','11h00','15h30']}] },
-  { g: 'GD Pneu',                    carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'GDM',                        carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Gentil Service',             carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Global Car',                 carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'GSD Gestion Sces Location',  carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  // ── H ──
-  { g: 'Happy Car',                  carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Harispe',                    carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Haristoy',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Herrikoa',                   carriers: [{id:'hendaye',deps:['09h15','14h15']}] },
-  { g: 'Hirigoyen Louhossoa',        carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Hirigoyen Macaye',           carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Hiruak Bat',                 carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Hourdebaigt',                carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  // ── I ──
-  { g: 'Illumbe',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Intxaurmendi',               carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Irachabal',                  carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Irey',                       carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Iribarren Patrick',          carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Ispeguy (Mocho)',            carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  // ── J ──
-  { g: 'Jaury',                      carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'JM Auto',                    carriers: [{id:'lande',deps:['06h00']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'John Deere',                 carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'JS Auto',                    carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Julien Muguida',             carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  // ── K ──
-  { g: 'Kenzo',                      carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Koro',                       carriers: [{id:'lande',deps:['10h45','15h30']}] },
-  // ── L ──
-  { g: "L'Avenue Hossegor",          carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'La Gare (Combo)',            carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Labaçhot (Escos)',           carriers: [{id:'pb',deps:['15h15','18h00']}] },
-  { g: 'Laminak Bus',                carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Lana',                       carriers: [{id:'lande',deps:['06h00','10h45','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Landoto',                    carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Lapurdi Garage',             carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Lascano',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Lau Auto',                   carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Lavignasse',                 carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'LB Service 40',             carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Le Petit Garage',            carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Le Vieux Port (Chez Chopin)',carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Leclerc Capbreton (Socadi)', carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Leclerc Hendaye',            carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Leclerc Soutons',            carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Leclerc St Jean De Luz',     carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Leclerc Tyrosse',            carriers: [{id:'lande',deps:['06h00','11h00','15h30']}] },
-  { g: 'Lerzy',                      carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Lissart Didier',             carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Lokaz Auto',                 carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Loubet',                     carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Lousteau',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Lucu',                       carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Lycée Pro JP Champo',        carriers: [{id:'pb',deps:['11h15']}] },
-  // ── M ──
-  { g: 'Madalia Ocafrain',           carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Mainhaguiet',                carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Maitia Frantxoa',            carriers: [{id:'serge',deps:['09h30','15h30']}] },
-  { g: 'Many Loisir',                carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Marensin Chopin',            carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Marinela',                   carriers: [{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Martinon',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Mathieu EMP Lapurdi',        carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Maya Sport',                 carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Mecagri',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Mendiburu Frere-Horticulteur',carriers:[{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Mendikoharis (URT Auto)',    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'MHSB',                       carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Miramon',                    carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'MJ Auto',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'ML',                         carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Mocho (Ispeguy)',            carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Montolieu',                  carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Motoculture Du Bas Adour',   carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Muguida',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  // ── N ──
-  { g: 'Nafarroa',                   carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Naza',                       carriers: [{id:'lande',deps:['10h45','15h30']}] },
-  { g: 'NCS',                        carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Negobus',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Néo Réseaux',                carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Neoglass',                   carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Noël Auto',                  carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'NR Motorsport',              carriers: [{id:'bearn',deps:['11h00']}] },
-  // ── O ──
-  { g: 'Ocafrain Madalia',           carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Olaizola',                   carriers: [{id:'pb',deps:['15h15','16h15']}] },
-  { g: 'Orthez Auto',                carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Oyhamburu',                  carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  // ── P ──
-  { g: 'Pat Auto',                   carriers: [{id:'serge',deps:['15h30']},{id:'pb',deps:['11h15']}] },
-  { g: 'Pedare (Ustaritz)',          carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Petit Garage',               carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Peyre Pare-Brise',           carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Pirone',                     carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Planuya',                    carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Pochulu',                    carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Poulou Pascal',              carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Puissance D Garage',         carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Pyrénées Auto',              carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  // ── R ──
-  { g: 'Raymond',                    carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Reflex Auto',                carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Relais Des Gaves',           carriers: [{id:'lande',deps:['06h00']},{id:'pb',deps:['11h00','15h30']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Roady (Augaray)',            carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Rond Point',                 carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'RV Garage',                  carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  // ── S ──
-  { g: 'Sabarots',                   carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Saffores',                   carriers: [] },
-  { g: 'Sakanette',                  carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Salles Et Dutrey',           carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Scavelli',                   carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Semerena',                   carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'SGM Auto',                   carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'Sobamat',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Socadi (Leclerc Capbreton)', carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Sopite',                     carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Spvi Dax',                   carriers: [{id:'lande',deps:['06h00','11h00']}] },
-  { g: 'St Etienne Garage',          carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Station Elan Arrieta',       carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Station Service Du Port',    carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'STPI',                       carriers: [{id:'hendaye',deps:['09h15','14h15']}] },
-  // ── T ──
-  { g: 'Thambo J-Pierre',            carriers: [{id:'pb',deps:['11h15','18h00']}] },
-  { g: 'Tilt Auto',                  carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'TMS',                        carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Toffolo',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'Triumphe (Vintage Vadrouille)',carriers:[{id:'hendaye',deps:['09h15','14h15']}] },
-  { g: 'TS Auto',                    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  // ── U ──
-  { g: 'Urtxintxa',                  carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  { g: 'URT Auto (Mendikoharis)',    carriers: [{id:'pb',deps:['11h15','16h15']}] },
-  // ── V ──
-  { g: 'Vallade (EV)',               carriers: [{id:'lande',deps:['06h00']},{id:'bearn',deps:['11h00','15h30']}] },
-  { g: 'Ville De Cambo',             carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15']}] },
-  { g: 'Ville Hendaye',              carriers: [{id:'hendaye',deps:['09h15','14h15']},{id:'ace',deps:['07h00','11h30']}] },
-  { g: 'Ville Hossegor',             carriers: [{id:'lande',deps:['06h00','10h45']}] },
-  { g: 'Vintage Car Club',           carriers: [{id:'lande',deps:['06h00','10h45','15h30']}] },
-  { g: 'Vintage Vadrouille (Triumphe)',carriers:[{id:'hendaye',deps:['09h15','14h15']}] },
-  // ── W ──
-  { g: 'World Of Part',              carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  // ── X ──
-  { g: 'Xabi Girard',                carriers: [{id:'serge',deps:['09h30','15h30']},{id:'pb',deps:['11h15','15h30']}] },
-  { g: 'Xabi Meca',                  carriers: [{id:'bearn',deps:['11h00','15h30']}] },
-  // ── Z ──
-  { g: 'Zelaia',                     carriers: [{id:'pb',deps:['11h15','18h00']}] },
-];
 
 // Helpers
 function toMin(h,m){ return h*60+m; }
