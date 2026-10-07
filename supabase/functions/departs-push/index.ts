@@ -5,6 +5,8 @@
 // - "welcome"   juste après l'abonnement d'un téléphone, pour confirmer que ça marche
 // - "event"     l'admin vient de signaler un retard / une annulation (mot de passe admin)
 // - "broadcast" message de l'admin à toute l'équipe (mot de passe admin)
+// - "backup"    sauvegarde JSON dans le stockage Supabase (pg_cron chaque lundi, ou l'admin)
+// - "backups"   liste des sauvegardes avec liens de téléchargement (mot de passe admin)
 //
 // Les horaires viennent de la table carriers (modifiable dans l'admin) ; data.js sur GitHub
 // ne sert plus que de secours. Les retards et annulations du jour sont dans departure_events.
@@ -119,6 +121,31 @@ async function isAdmin(password: unknown) {
   return data === true;
 }
 
+const BACKUP_BUCKET = "sauvegardes";
+const BACKUPS_KEPT = 12; // ~3 mois de sauvegardes hebdomadaires
+
+async function makeBackup() {
+  const [garages, carriers, events] = await Promise.all([
+    db.from("garages").select("name,carriers,created_at").order("name"),
+    db.from("carriers").select("*").order("sort"),
+    db.from("departure_events").select("*").gte("day", new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10)),
+  ]);
+  for (const r of [garages, carriers, events]) if (r.error) throw r.error;
+  const day = parisNow().date;
+  const content = JSON.stringify({
+    app: "Départs Livraison", date: new Date().toISOString(),
+    garages: garages.data, carriers: carriers.data, departure_events: events.data,
+  }, null, 1);
+  const name = `sauvegarde-${day}.json`;
+  const up = await db.storage.from(BACKUP_BUCKET).upload(name, new Blob([content], { type: "application/json" }), { upsert: true });
+  if (up.error) throw up.error;
+  // On ne garde que les plus récentes
+  const { data: files } = await db.storage.from(BACKUP_BUCKET).list("", { sortBy: { column: "name", order: "desc" } });
+  const old = (files ?? []).slice(BACKUPS_KEPT).map((f) => f.name);
+  if (old.length) await db.storage.from(BACKUP_BUCKET).remove(old);
+  return { name, garages: garages.data?.length ?? 0, carriers: carriers.data?.length ?? 0 };
+}
+
 type Sub = { endpoint: string; p256dh: string; auth: string };
 
 async function sendToAll(subs: Sub[], payload: object) {
@@ -176,20 +203,40 @@ Deno.serve(async (req) => {
       return json(r);
     }
 
-    // Retard ou annulation signalé par l'admin : on prévient tout le monde tout de suite
+    // Sauvegarde : chaque lundi par pg_cron, ou à la demande de l'admin
+    if (body.action === "backup") {
+      const allowed = req.headers.get("x-cron-secret") === cfg.cron_secret || (await isAdmin(body.password));
+      if (!allowed) return json({ error: "interdit" }, 403);
+      return json(await makeBackup());
+    }
+
+    // Liste des sauvegardes, avec un lien de téléchargement valable 1 h
+    if (body.action === "backups") {
+      if (!(await isAdmin(body.password))) return json({ error: "mot de passe admin incorrect" }, 403);
+      const { data: files } = await db.storage.from(BACKUP_BUCKET).list("", { sortBy: { column: "name", order: "desc" } });
+      const names = (files ?? []).map((f) => f.name).filter((n) => n.endsWith(".json"));
+      if (!names.length) return json([]);
+      const { data: urls } = await db.storage.from(BACKUP_BUCKET).createSignedUrls(names, 3600, { download: true });
+      return json((urls ?? []).map((u, i) => ({ name: names[i], url: u.signedUrl })));
+    }
+
+    // Retard ou annulation signalé par l'admin (aujourd'hui ou un autre jour) : on prévient tout le monde
     if (body.action === "event") {
       if (!(await isAdmin(body.password))) return json({ error: "mot de passe admin incorrect" }, 403);
       const schedule = await loadSchedule();
       const label = schedule.carriers[String(body.carrier)]?.label ?? String(body.carrier);
       const time = String(body.time ?? "");
+      const today = parisNow().date;
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(String(body.day)) ? String(body.day) : today;
+      const when = day === today ? "" : new Date(day + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" }) + " — ";
       const { data: ev } = await db.from("departure_events").select("status,delay_min")
-        .eq("day", parisNow().date).eq("carrier_id", String(body.carrier)).eq("dep_time", time).maybeSingle();
+        .eq("day", day).eq("carrier_id", String(body.carrier)).eq("dep_time", time).maybeSingle();
       if (!ev) return json({ error: "aucun changement trouvé" }, 404);
       const payload = ev.status === "annule"
-        ? { title: `❌ Départ annulé — ${time}`, body: label }
+        ? { title: `❌ Départ annulé — ${when}${time}`, body: label }
         : ev.status === "retard"
-        ? { title: `⚠️ Retard ${ev.delay_min} min — ${label}`, body: `Départ de ${time} repoussé à ${fmt(parseTime(time) + ev.delay_min)}` }
-        : { title: `✅ Départ rétabli — ${time}`, body: `${label} part à l'heure prévue` };
+        ? { title: `⚠️ Retard ${ev.delay_min} min — ${label}`, body: `${when ? when.charAt(0).toUpperCase() + when.slice(1) : ""}Départ de ${time} repoussé à ${fmt(parseTime(time) + ev.delay_min)}` }
+        : { title: `✅ Départ rétabli — ${when}${time}`, body: `${label} part à l'heure prévue` };
       const { data: subs } = await db.from("push_subscriptions").select("endpoint,p256dh,auth");
       const r = await sendToAll(subs ?? [], { ...payload, tag: `ev-${body.carrier}-${time}` });
       return json(r);

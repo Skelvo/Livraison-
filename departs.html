@@ -192,16 +192,24 @@ async function loadGaragesFromSupabase() {
       headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
     });
     const data = await res.json();
-    if(!Array.isArray(data)) return;
-    data.forEach(function(row){
-      const carriers = LIVE.fixGarage({ g: row.name, carriers: JSON.parse(row.carriers) }).carriers;
-      const exists = GARAGES_DATA.find(function(g){ return g.g === row.name; });
-      if(exists) exists.carriers = carriers;
-      else GARAGES_DATA.push({ g: row.name, carriers: carriers });
-    });
+    if(!Array.isArray(data) || !data.length) return;
+    try { localStorage.setItem('garages_cache', JSON.stringify(data)); } catch(e) {}
+    applyGarageRows(data);
     render();
   } catch(e) { console.log('Supabase error:', e); }
 }
+
+// La base contient tous les garages : elle remplace la liste de data.js
+function applyGarageRows(data){
+  const list = data.map(function(row){
+    let carriers = [];
+    try { carriers = JSON.parse(row.carriers) || []; } catch(e) {}
+    return LIVE.fixGarage({ g: row.name, carriers: carriers });
+  });
+  GARAGES_DATA.length = 0;
+  list.forEach(function(g){ GARAGES_DATA.push(g); });
+}
+try { const cached = JSON.parse(localStorage.getItem('garages_cache') || 'null'); if(cached && cached.length) applyGarageRows(cached); } catch(e) {}
 
 // Helpers
 function parseTime(s){ const p = s.split('h'); return parseInt(p[0])*60 + parseInt(p[1]||0); }
