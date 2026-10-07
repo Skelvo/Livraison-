@@ -1,11 +1,13 @@
 // Alertes départ : notification sur les téléphones abonnés 5 min avant chaque départ.
 //
-// Appelée chaque minute par une tâche pg_cron (action "tick", protégée par x-cron-secret),
-// et par l'app juste après l'abonnement d'un téléphone (action "welcome") pour confirmer
-// que les alertes arrivent bien.
+// Actions :
+// - "tick"      chaque minute via pg_cron (protégée par x-cron-secret)
+// - "welcome"   juste après l'abonnement d'un téléphone, pour confirmer que ça marche
+// - "event"     l'admin vient de signaler un retard / une annulation (mot de passe admin)
+// - "broadcast" message de l'admin à toute l'équipe (mot de passe admin)
 //
-// Les horaires viennent de data.js (ou index.html avant la séparation) sur la branche main
-// du dépôt : modifier un horaire dans l'app suffit, rien à changer ici.
+// Les horaires viennent de la table carriers (modifiable dans l'admin) ; data.js sur GitHub
+// ne sert plus que de secours. Les retards et annulations du jour sont dans departure_events.
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -33,8 +35,18 @@ function extractObject(src: string, name: string): string | null {
   return m ? m[1] : null;
 }
 
-// Les horaires sont relus au plus toutes les 10 minutes
 async function loadSchedule(): Promise<Schedule> {
+  const { data: rows } = await db.from("carriers").select("id,label,deps,active");
+  const active = (rows ?? []).filter((r) => r.active);
+  if (active.length) {
+    const schedule = {
+      carriers: Object.fromEntries(active.map((r) => [r.id, { label: r.label }])),
+      deps: Object.fromEntries(active.map((r) => [r.id, r.deps as string[]])),
+    };
+    cache = { at: Date.now(), schedule };
+    return schedule;
+  }
+  // Secours : horaires de data.js sur GitHub (relus au plus toutes les 10 minutes)
   if (cache && Date.now() - cache.at < 10 * 60 * 1000) return cache.schedule;
   for (const url of SOURCES) {
     const res = await fetch(url);
@@ -100,6 +112,12 @@ const parseTime = (s: string) => {
   const [h, m] = s.split("h");
   return parseInt(h) * 60 + parseInt(m || "0");
 };
+const fmt = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + "h" + String(m % 60).padStart(2, "0");
+
+async function isAdmin(password: unknown) {
+  const { data } = await db.rpc("admin_check", { p_password: String(password ?? "") });
+  return data === true;
+}
 
 type Sub = { endpoint: string; p256dh: string; auth: string };
 
@@ -148,6 +166,35 @@ Deno.serve(async (req) => {
       return json(r);
     }
 
+    // Message libre de l'admin à toute l'équipe
+    if (body.action === "broadcast") {
+      if (!(await isAdmin(body.password))) return json({ error: "mot de passe admin incorrect" }, 403);
+      const text = String(body.message ?? "").trim().slice(0, 300);
+      if (!text) return json({ error: "message vide" }, 400);
+      const { data: subs } = await db.from("push_subscriptions").select("endpoint,p256dh,auth");
+      const r = await sendToAll(subs ?? [], { title: "📢 Message de l'équipe", body: text, tag: `msg-${Date.now()}` });
+      return json(r);
+    }
+
+    // Retard ou annulation signalé par l'admin : on prévient tout le monde tout de suite
+    if (body.action === "event") {
+      if (!(await isAdmin(body.password))) return json({ error: "mot de passe admin incorrect" }, 403);
+      const schedule = await loadSchedule();
+      const label = schedule.carriers[String(body.carrier)]?.label ?? String(body.carrier);
+      const time = String(body.time ?? "");
+      const { data: ev } = await db.from("departure_events").select("status,delay_min")
+        .eq("day", parisNow().date).eq("carrier_id", String(body.carrier)).eq("dep_time", time).maybeSingle();
+      if (!ev) return json({ error: "aucun changement trouvé" }, 404);
+      const payload = ev.status === "annule"
+        ? { title: `❌ Départ annulé — ${time}`, body: label }
+        : ev.status === "retard"
+        ? { title: `⚠️ Retard ${ev.delay_min} min — ${label}`, body: `Départ de ${time} repoussé à ${fmt(parseTime(time) + ev.delay_min)}` }
+        : { title: `✅ Départ rétabli — ${time}`, body: `${label} part à l'heure prévue` };
+      const { data: subs } = await db.from("push_subscriptions").select("endpoint,p256dh,auth");
+      const r = await sendToAll(subs ?? [], { ...payload, tag: `ev-${body.carrier}-${time}` });
+      return json(r);
+    }
+
     if (body.action === "tick") {
       if (req.headers.get("x-cron-secret") !== cfg.cron_secret) return json({ error: "interdit" }, 403);
       const now = parisNow();
@@ -155,19 +202,28 @@ Deno.serve(async (req) => {
       if (holidays(parseInt(now.date)).has(now.date)) return json({ skipped: "jour férié" });
 
       const schedule = await loadSchedule();
+      const { data: evs } = await db.from("departure_events").select("carrier_id,dep_time,status,delay_min").eq("day", now.date);
+      const evOf = (cid: string, t: string) => (evs ?? []).find((e) => e.carrier_id === cid && e.dep_time === t);
       // "at" (ex. "11h10") permet de tester un horaire précis
       const target = (body.at ? parseTime(String(body.at)) : now.minutes) + MINUTES_BEFORE;
-      const leaving = Object.keys(schedule.deps).filter((cid) =>
-        schedule.deps[cid].some((t) => parseTime(t) === target)
-      );
+      // Départs dont l'heure réelle (retard compris, annulés exclus) tombe dans 5 min
+      const leaving: { cid: string; delayed: boolean }[] = [];
+      for (const cid of Object.keys(schedule.deps)) {
+        for (const t of schedule.deps[cid]) {
+          const ev = evOf(cid, t);
+          if (ev?.status === "annule") continue;
+          const delay = ev?.status === "retard" ? ev.delay_min : 0;
+          if (parseTime(t) + delay === target) leaving.push({ cid, delayed: delay > 0 });
+        }
+      }
       if (!leaving.length) return json({ nothing: true });
 
-      const time = schedule.deps[leaving[0]].find((t) => parseTime(t) === target)!;
+      const time = fmt(target);
       // Une seule alerte par horaire et par jour, même si la tâche tourne deux fois
       const { error: dup } = await db.from("push_sent").insert({ key: `${now.date}|${time}` });
       if (dup) return json({ already: true });
 
-      const labels = leaving.map((cid) => schedule.carriers[cid]?.label ?? cid);
+      const labels = leaving.map((l) => (schedule.carriers[l.cid]?.label ?? l.cid) + (l.delayed ? " (retardé)" : ""));
       const { data: subs } = await db.from("push_subscriptions").select("endpoint,p256dh,auth");
       const r = await sendToAll(subs ?? [], {
         title: `⏰ Départ dans ${MINUTES_BEFORE} min — ${time}`,

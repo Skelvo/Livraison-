@@ -98,6 +98,14 @@ body {
 .pill-hendaye { background:#2c1a3d; color:#9060e0; border-color:#40286a; }
 .pill-ace     { background:#2a2a2a; color:#d0d0d0; border-color:#555; }
 
+/* ── RETARDS / ANNULATIONS ── */
+.late { color:var(--orange); font-weight:700; }
+.pill .late { font-size:.85em; }
+.pill.cancelled { text-decoration:line-through; opacity:.7; }
+.row.cancelled { border-color:rgba(232,64,64,.5); }
+.row.cancelled .row-time { text-decoration:line-through; color:var(--muted); }
+.row.cancelled .row-cd { color:var(--red); font-weight:700; letter-spacing:.1em; }
+
 /* ── BANDEAU : garages du prochain départ, qui défilent ── */
 .ticker {
   display:flex; align-items:center; gap:calc(var(--u)*2); overflow:hidden; min-height:calc(var(--u)*6);
@@ -172,6 +180,7 @@ body {
 </div>
 
 <script src="data.js"></script>
+<script src="live.js"></script>
 <script>
 // Garages ajoutés ou modifiés depuis l'admin (même base que index.html)
 const SUPA_URL = 'https://aitbhskkwoqmoqfpogph.supabase.co';
@@ -185,7 +194,7 @@ async function loadGaragesFromSupabase() {
     const data = await res.json();
     if(!Array.isArray(data)) return;
     data.forEach(function(row){
-      const carriers = JSON.parse(row.carriers);
+      const carriers = LIVE.fixGarage({ g: row.name, carriers: JSON.parse(row.carriers) }).carriers;
       const exists = GARAGES_DATA.find(function(g){ return g.g === row.name; });
       if(exists) exists.carriers = carriers;
       else GARAGES_DATA.push({ g: row.name, carriers: carriers });
@@ -201,7 +210,10 @@ function fmtCD(diff){
   if(diff < 60) return 'dans ' + diff + ' min';
   return 'dans ' + Math.floor(diff/60) + 'h' + String(diff%60).padStart(2,'0');
 }
-function pill(cid){ return '<span class="pill pill-' + cid + '">' + CARRIERS[cid].label + '</span>'; }
+function pill(cid, delay){
+  return '<span class="pill pill-' + cid + '">' + CARRIERS[cid].label + (delay ? ' <b class="late">+' + delay + '</b>' : '') + '</span>';
+}
+function pillOf(d){ return d.cancelled ? '<span class="pill pill-' + d.cid + ' cancelled">' + CARRIERS[d.cid].label + '</span>' : pill(d.cid, d.delay); }
 function urgency(diff){ return diff <= 15 ? 'urgent' : diff <= 30 ? 'soon' : ''; }
 function plural(n, w){ return n + ' ' + w + (n > 1 ? 's' : ''); }
 
@@ -229,12 +241,15 @@ function renderTicker(time, names){
 }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-// Tous les départs de la journée, triés par heure
+// Tous les départs de la journée, triés par heure réelle (retards compris).
+// time = heure prévue (celle des garages), t = heure réelle en minutes, show = heure réelle affichée
 function allDepartures(){
   const list = [];
   Object.keys(CARRIER_DEPS).forEach(function(cid){
     CARRIER_DEPS[cid].forEach(function(time){
-      list.push({ cid: cid, time: time, t: parseTime(time) });
+      const eff = LIVE.effMin(cid, time);
+      const t = eff === null ? parseTime(time) : eff;
+      list.push({ cid: cid, time: time, t: t, show: LIVE.fmt(t), cancelled: eff === null, delay: eff === null ? 0 : eff - parseTime(time) });
     });
   });
   return list.sort(function(a,b){ return a.t - b.t || CARRIERS[a.cid].label.localeCompare(CARRIERS[b.cid].label); });
@@ -243,50 +258,55 @@ function allDepartures(){
 function render(){
   const now = nowMin();
   const deps = allDepartures();
+  // Les annulés restent affichés (barrés) jusqu'à leur heure prévue, mais ne comptent jamais comme « prochain départ »
   const upcoming = deps.filter(function(d){ return d.t > now; });
-  const past = deps.filter(function(d){ return d.t <= now; });
+  const past = deps.filter(function(d){ return d.t <= now && !d.cancelled; });
 
   // Prochain départ : tous les transporteurs qui partent à la même heure
   const nextEl = document.getElementById('next');
-  if(upcoming.length){
-    const first = upcoming.filter(function(d){ return d.t === upcoming[0].t; });
+  const active = upcoming.filter(function(d){ return !d.cancelled; });
+  if(active.length){
+    const first = active.filter(function(d){ return d.t === active[0].t; });
     const diff = first[0].t - now;
     const nb = first.reduce(function(s, d){ return s + garageCount(d.cid, d.time); }, 0);
     nextEl.className = 'next ' + urgency(diff);
     nextEl.innerHTML =
       '<div class="label">Prochain départ</div>' +
-      '<div class="next-time">' + first[0].time + '</div>' +
-      '<div class="next-who">' + first.map(function(d){ return pill(d.cid); }).join('') + '</div>' +
+      '<div class="next-time">' + first[0].show + '</div>' +
+      '<div class="next-who">' + first.map(function(d){ return pill(d.cid, d.delay); }).join('') + '</div>' +
       '<div><div class="next-cd">' + fmtCD(diff) + '</div>' +
-      '<div class="next-sub">' + plural(nb, 'garage') + '</div></div>';
+      '<div class="next-sub">' + plural(nb, 'garage') +
+        first.filter(function(d){ return d.delay; }).map(function(d){ return ' · <span class="late">retard ' + d.delay + ' min (prévu ' + d.time + ')</span>'; }).join('') +
+      '</div></div>';
     const names = [];
     first.forEach(function(d){ garagesFor(d.cid, d.time).forEach(function(n){ if(names.indexOf(n) === -1) names.push(n); }); });
-    renderTicker(first[0].time, names.sort(function(a,b){ return a.localeCompare(b); }));
-    upcoming.splice(0, first.length);
+    renderTicker(first[0].show, names.sort(function(a,b){ return a.localeCompare(b); }));
+    first.forEach(function(d){ upcoming.splice(upcoming.indexOf(d), 1); });
+    upcoming.sort(function(a, b){ return a.t - b.t; });
   } else {
     renderTicker('', []);
     nextEl.className = 'next';
     nextEl.innerHTML =
       '<div class="label">Prochain départ</div>' +
       '<div class="next-done">Plus de départ aujourd’hui</div>' +
-      (deps.length ? '<div class="next-sub">Demain : ' + deps[0].time + ' — ' + CARRIERS[deps[0].cid].label + '</div>' : '');
+      (deps.length ? '<div class="next-sub">Demain : ' + deps.slice().sort(function(a,b){ return parseTime(a.time) - parseTime(b.time); })[0].time + '</div>' : '');
   }
 
   // Une ligne par heure, avec tous les transporteurs qui partent à cette heure-là
   const groups = [];
   upcoming.forEach(function(d){
     const last = groups[groups.length - 1];
-    if(last && last.t === d.t) last.cids.push(d.cid);
-    else groups.push({ t: d.t, time: d.time, cids: [d.cid] });
+    if(last && last.t === d.t && last.cancelled === d.cancelled) last.items.push(d);
+    else groups.push({ t: d.t, show: d.show, cancelled: d.cancelled, items: [d] });
   });
   const rowsEl = document.getElementById('rows');
   rowsEl.innerHTML = groups.length
     ? groups.map(function(g){
         const diff = g.t - now;
-        return '<div class="row ' + urgency(diff) + '">' +
-          '<div class="row-time">' + g.time + '</div>' +
-          '<div class="row-who">' + g.cids.map(pill).join('') + '</div>' +
-          '<div class="row-cd">' + fmtCD(diff) + '</div>' +
+        return '<div class="row ' + (g.cancelled ? 'cancelled' : urgency(diff)) + '">' +
+          '<div class="row-time">' + g.show + '</div>' +
+          '<div class="row-who">' + g.items.map(pillOf).join('') + '</div>' +
+          '<div class="row-cd">' + (g.cancelled ? 'ANNULÉ' : fmtCD(diff)) + '</div>' +
         '</div>';
       }).join('')
     : '<div class="empty">Rien d’autre aujourd’hui.</div>';
@@ -295,7 +315,7 @@ function render(){
   // Les plus récents d'abord : si la ligne est trop longue, ce sont les plus anciens qui sont coupés
   document.getElementById('past').innerHTML = past.length
     ? '<span>Déjà partis :</span>' + past.slice().reverse().map(function(d){
-        return '<span class="past-item">' + d.time + ' ' + CARRIERS[d.cid].label + '</span>';
+        return '<span class="past-item">' + d.show + ' ' + CARRIERS[d.cid].label + '</span>';
       }).join('')
     : '';
 }
@@ -342,8 +362,14 @@ setInterval(function(){
 // La télé reste allumée toute la journée : on recharge les garages de l'admin régulièrement
 setInterval(loadGaragesFromSupabase, 10 * 60 * 1000);
 
+// Horaires et retards modifiés dans l'admin : vérifiés chaque minute
+setInterval(function(){ LIVE.refresh().then(function(changed){ if(changed) render(); }); }, 60000);
+// Copie de la page pour qu'elle reste affichée même si le réseau coupe
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+
 renderClock();
 render();
+LIVE.refresh().then(function(){ render(); });
 loadGaragesFromSupabase();
 </script>
 </body>

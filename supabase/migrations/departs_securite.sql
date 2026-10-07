@@ -17,3 +17,7 @@ alter table public.admin_config enable row level security;
 -- admin_check(p_password), admin_save_garage(p_password, p_name, p_carriers),
 -- admin_delete_garage(p_password, p_name), increment_stat(garage_name), increment_total() :
 -- fonctions SECURITY DEFINER, voir l'historique des migrations Supabase.
+
+-- 2026-10-07 : transporteurs modifiables (carriers), retards/annulations (departure_events),
+-- journal des recherches (search_log) et fonctions admin_save_carrier, admin_set_event,
+-- log_search, admin_stats — voir l'historique des migrations Supabase.

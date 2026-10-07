@@ -66,6 +66,10 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 }
 
 /* Heure en haut à droite, bien contrastée */
+.offline-bar, .events-banner { display: none; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; line-height: 1.6; }
+.offline-bar.show { display: block; background: var(--surface2); color: var(--muted); border-bottom: 1px solid var(--border); }
+.events-banner.show { display: block; background: rgba(245,144,32,.12); color: var(--orange); border-bottom: 1px solid rgba(245,144,32,.4); }
+.events-banner .ev-cancel { color: var(--red); }
 .board-link {
   display: block;
   margin: 16px 20px 0;
@@ -444,6 +448,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
   background: var(--surface2);
   transition: all .3s;
 }
+.dep-pill.dep-cancel  { color: var(--red); border-color: transparent; background: transparent; text-decoration: line-through; }
+.dep-pill.dep-late:not(.dep-THE-ONE) { color: var(--orange); border-color: var(--orange); }
 .dep-pill.dep-past    { color: var(--muted2); border-color: transparent; background: transparent; text-decoration: line-through; }
 .dep-pill.dep-future  { color: var(--muted);  border-color: var(--border); background: var(--surface2); }
 .dep-pill.dep-THE-ONE { 
@@ -727,6 +733,30 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 .team-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .team-when { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
 
+.admin-hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin: -4px 0 10px; }
+.admin-btn-ghost { background: var(--surface2) !important; color: var(--text) !important; border: 1px solid var(--border) !important; margin-top: 8px; }
+.ev-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ev-row .ev-time { font-family: 'Bebas Neue', sans-serif; font-size: 20px; min-width: 52px; }
+.ev-row .ev-label { flex: 1; min-width: 110px; font-size: 13px; }
+.ev-row select, .ev-row button { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 5px 6px; font-size: 12px; font-family: 'DM Mono', monospace; cursor: pointer; }
+.ev-row .ev-state { font-family: 'DM Mono', monospace; font-size: 11px; }
+.car-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+.car-card.off { opacity: .55; }
+.car-head { display: flex; align-items: center; gap: 8px; }
+.car-head input[type=text] { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 8px; font-size: 14px; }
+.car-head input[type=color] { width: 36px; height: 34px; border: none; background: none; padding: 0; }
+.car-head label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.car-times { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.car-time { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+.car-time input { width: 64px; background: none; border: none; color: var(--text); padding: 6px; font-family: 'DM Mono', monospace; font-size: 14px; text-align: center; }
+.car-time button, .car-add-time { background: none; border: none; color: var(--muted); padding: 4px 8px; cursor: pointer; font-size: 14px; }
+.car-add-time { border: 1px dashed var(--border); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 12px; }
+.stat-line { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 3px 0; }
+.stat-line .stat-name { width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-line .stat-bar { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.stat-line .stat-bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.stat-line .stat-n { width: 34px; text-align: right; font-family: 'DM Mono', monospace; color: var(--muted); }
+.stat-sub { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin: 14px 0 6px; }
 .admin-garage-list {
   display: flex;
   flex-direction: column;
@@ -824,6 +854,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 </div>
 
 <div class="imminent-banner" id="imminentBanner"></div>
+<div class="offline-bar" id="offlineBar"></div>
+<div class="events-banner" id="eventsBanner"></div>
 
 <div class="hero">
   <div class="hero-clock" id="heroClock">--:--:--</div>
@@ -914,6 +946,28 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
       <div class="admin-section-title">Équipe <span id="teamCount" style="color:var(--green)"></span></div>
       <div class="admin-garage-list" id="teamList"><em style="color:var(--muted);font-size:12px">Chargement…</em></div>
 
+      <!-- MESSAGE À L'ÉQUIPE -->
+      <div class="admin-section-title" style="margin-top:28px">Message à toute l'équipe</div>
+      <textarea class="admin-search" id="bcText" rows="2" maxlength="300" placeholder="Ex : Quai 2 bloqué ce matin" style="resize:vertical"></textarea>
+      <button class="admin-btn" onclick="adminBroadcast()" style="margin-top:8px">📢 ENVOYER À TOUS</button>
+      <div class="admin-msg" id="bcMsg"></div>
+
+      <!-- DÉPARTS DU JOUR -->
+      <div class="admin-section-title" style="margin-top:28px">Départs du jour — retard / annulation</div>
+      <div class="admin-garage-list" id="evList" style="max-height:none"></div>
+      <div class="admin-msg" id="evMsg"></div>
+
+      <!-- TRANSPORTEURS & HORAIRES -->
+      <div class="admin-section-title" style="margin-top:28px">Transporteurs & horaires</div>
+      <div class="admin-hint">Modifie une heure directement dans sa case : les garages qui l'avaient suivent tout seuls. Une nouvelle heure ajoutée n'est rattachée à aucun garage : ajoute‑la aux garages concernés avec « Modifier ».</div>
+      <div id="carrierEditor"></div>
+      <button class="admin-btn admin-btn-ghost" onclick="addCarrierRow()">+ AJOUTER UN TRANSPORTEUR</button>
+      <div class="admin-msg" id="carMsg"></div>
+
+      <!-- STATS -->
+      <div class="admin-section-title" style="margin-top:28px">Stats — 7 derniers jours</div>
+      <div id="statsBox"><em style="color:var(--muted);font-size:12px">Chargement…</em></div>
+
       <!-- AJOUTER UN GARAGE -->
       <div class="admin-section-title" style="margin-top:28px">Ajouter un garage</div>
       <div class="admin-field">
@@ -922,38 +976,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
       </div>
       <div class="admin-field">
         <label>Transporteurs & horaires de départ (séparer par virgule ex: 09h30,15h30)</label>
-        <div class="admin-carriers-check" id="adminCarriersCheck">
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="chk-serge">
-            <label class="admin-carrier-label" for="chk-serge">Serge</label>
-            <input class="admin-carrier-deps" id="deps-serge" placeholder="09h30,15h30" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="chk-lande">
-            <label class="admin-carrier-label" for="chk-lande">Packeto Lande</label>
-            <input class="admin-carrier-deps" id="deps-lande" placeholder="06h00,10h45" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="chk-pb">
-            <label class="admin-carrier-label" for="chk-pb">Packeto Pays Basque</label>
-            <input class="admin-carrier-deps" id="deps-pb" placeholder="11h15,16h15" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="chk-bearn">
-            <label class="admin-carrier-label" for="chk-bearn">Packeto Béarn</label>
-            <input class="admin-carrier-deps" id="deps-bearn" placeholder="11h00,15h30" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="chk-hendaye">
-            <label class="admin-carrier-label" for="chk-hendaye">Packeto Hendaye</label>
-            <input class="admin-carrier-deps" id="deps-hendaye" placeholder="09h15,14h15" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="chk-ace">
-            <label class="admin-carrier-label" for="chk-ace">ACE Hendaye</label>
-            <input class="admin-carrier-deps" id="deps-ace" placeholder="07h00,11h30" disabled>
-          </div>
-        </div>
+        <div class="admin-carriers-check" id="adminCarriersCheck"></div>
       </div>
       <button class="admin-btn" onclick="adminAddGarage()">AJOUTER LE GARAGE</button>
       <div class="admin-msg" id="adminAddMsg"></div>
@@ -966,38 +989,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
       <!-- EDIT MODAL -->
       <div class="admin-edit-modal" id="adminEditModal">
         <div class="admin-section-title" style="margin-top:0">Modifier le garage : <span id="editGarageName" style="color:var(--accent)"></span></div>
-        <div class="admin-carriers-check" id="editCarriersCheck">
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="echk-serge">
-            <label class="admin-carrier-label" for="echk-serge">Serge</label>
-            <input class="admin-carrier-deps" id="edeps-serge" placeholder="09h30,15h30" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="echk-lande">
-            <label class="admin-carrier-label" for="echk-lande">Packeto Lande</label>
-            <input class="admin-carrier-deps" id="edeps-lande" placeholder="06h00,10h45" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="echk-pb">
-            <label class="admin-carrier-label" for="echk-pb">Packeto Pays Basque</label>
-            <input class="admin-carrier-deps" id="edeps-pb" placeholder="11h15,16h15" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="echk-bearn">
-            <label class="admin-carrier-label" for="echk-bearn">Packeto Béarn</label>
-            <input class="admin-carrier-deps" id="edeps-bearn" placeholder="11h00,15h30" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="echk-hendaye">
-            <label class="admin-carrier-label" for="echk-hendaye">Packeto Hendaye</label>
-            <input class="admin-carrier-deps" id="edeps-hendaye" placeholder="09h15,14h15" disabled>
-          </div>
-          <div class="admin-carrier-row">
-            <input type="checkbox" id="echk-ace">
-            <label class="admin-carrier-label" for="echk-ace">ACE Hendaye</label>
-            <input class="admin-carrier-deps" id="edeps-ace" placeholder="07h00,11h30" disabled>
-          </div>
-        </div>
+        <div class="admin-carriers-check" id="editCarriersCheck"></div>
         <button class="admin-btn" onclick="adminSaveEdit()" style="margin-top:12px">ENREGISTRER</button>
         <button class="admin-btn danger" onclick="document.getElementById('adminEditModal').classList.remove('show')" style="margin-top:6px">ANNULER</button>
         <div class="admin-msg" id="adminEditMsg"></div>
@@ -1204,6 +1196,9 @@ window.saveName = function() {
   teamPing();
 };
 
+// Copie de l'app sur le téléphone pour l'ouvrir sans réseau (et réception des alertes)
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+
 (function() {
   renderMeLine();
   if(!getMyName()) window.askName(); else teamPing();
@@ -1226,12 +1221,9 @@ window.saveName = function() {
   } catch(e) {}
 })();
 
-window.loadGaragesFromSupabase = async function() {
-  try {
-    const data = await supaFetch('garages?select=name,carriers');
-    if(!data || !data.length) return;
+function applyGarageRows(data) {
     data.forEach(function(row) {
-      const carriers = JSON.parse(row.carriers);
+      const carriers = LIVE.fixGarage({g: row.name, carriers: JSON.parse(row.carriers)}).carriers;
       const exists = window.GARAGES_DATA_REF && window.GARAGES_DATA_REF.find(function(g){ return g.g === row.name; });
       if(!exists && window.GARAGES_DATA_REF) {
         window.GARAGES_DATA_REF.push({g: row.name, carriers: carriers});
@@ -1241,6 +1233,14 @@ window.loadGaragesFromSupabase = async function() {
       }
     });
     if(window.GARAGES_DATA_REF) window.GARAGES_DATA_REF.sort(function(a,b){ return a.g.localeCompare(b.g); });
+}
+
+window.loadGaragesFromSupabase = async function() {
+  try {
+    const data = await supaFetch('garages?select=name,carriers');
+    if(!Array.isArray(data)) return;
+    try { localStorage.setItem('garages_cache', JSON.stringify(data)); } catch(e) {}
+    applyGarageRows(data);
     if(window.renderCarriers) window.renderCarriers();
     if(window.renderTop) window.renderTop();
   } catch(e) { console.log('Supabase error:', e); }
@@ -1248,6 +1248,7 @@ window.loadGaragesFromSupabase = async function() {
 </script>
 
 <script src="data.js"></script>
+<script src="live.js"></script>
 <script>
 
 // Helpers
@@ -1261,8 +1262,16 @@ function fmtCD(diff){
   return Math.floor(diff/60)+'h'+String(diff%60).padStart(2,'0');
 }
 function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
-function getDeps(c){ return c.deps.map(parseTime); }
+// Heures réelles de départ (retards compris, annulations retirées)
+function getDeps(c){ return c.deps.map(function(t){ return LIVE.effMin(c.id, t); }).filter(function(t){ return t !== null; }); }
 function nextDep(c){ const now=nowMin(), d=getDeps(c).filter(t=>t>now); return d.length ? Math.min(...d) : null; }
+// « 15h30 » → « 15h30 (+20 min) » ou « 15h30 (annulé) »
+function depWithEvent(cid, t){
+  const e = LIVE.event(cid, t);
+  if(!e) return t;
+  return e.status === 'annule' ? '<s>' + t + '</s> <b style="color:var(--red)">annulé</b>'
+    : t + ' <b style="color:var(--orange)">→ ' + LIVE.fmt(LIVE.effMin(cid, t)) + '</b>';
+}
 function carrierSt(c){
   const now=nowMin(), deps=getDeps(c), up=deps.filter(t=>t>now);
   if(!up.length) return {s:'past'};
@@ -1285,8 +1294,10 @@ function checkNotifs(){
   const now = nowMin();
   Object.keys(CARRIER_DEPS).forEach(function(cid){
     CARRIER_DEPS[cid].forEach(function(d){
-      const t = parseTime(d), diff = t - now;
-      const k30 = cid+d+'30', k15 = cid+d+'15';
+      const t = LIVE.effMin(cid, d);
+      if(t === null) return;
+      const diff = t - now;
+      const k30 = cid+d+t+'30', k15 = cid+d+t+'15';
       if(diff > 0 && diff <= 30 && !notified.has(k30)){
         notified.add(k30);
         showToast('⏰ Départ dans 30 min', CARRIERS[cid].label + ' — ' + d, false);
@@ -1309,6 +1320,7 @@ function getStats(){ try{ return JSON.parse(localStorage.getItem('gs_v4') || '{}
 function incStat(n){ 
   const s=getStats(); s[n]=(s[n]||0)+1; localStorage.setItem('gs_v4', JSON.stringify(s));
   if(window.incStatShared) window.incStatShared(n);
+  supaRpc('log_search', {p_name: n, p_device: getDeviceId()}).catch(function(){});
   if(window.incTotalSearchCount) window.incTotalSearchCount();
   updateTotalCount();
 }
@@ -1370,7 +1382,7 @@ function buildResult(m){
     else statusHtml = '<span class="dep-status s-upcoming">→ ' + fmt(st.next) + '</span>';
     return '<div class="result-carrier-row">' +
       '<span class="carrier-pill pill-' + c.id + '">' + carr.label + '</span>' +
-      '<span class="dep-times">✈ ' + c.deps.join(' · ') + '</span>' +
+      '<span class="dep-times">✈ ' + c.deps.map(function(t){ return depWithEvent(c.id, t); }).join(' · ') + '</span>' +
       statusHtml + '</div>';
   }).join('');
 
@@ -1433,10 +1445,11 @@ function renderHero(){
   let best = null;
   Object.keys(CARRIER_DEPS).forEach(function(cid){
     CARRIER_DEPS[cid].forEach(function(d){
-      const t = parseTime(d);
-      if(t > now && (best === null || t < best.t)) best = {t:t, cid:cid};
+      const t = LIVE.effMin(cid, d);
+      if(t !== null && t > now && (best === null || t < best.t)) best = {t:t, cid:cid, d:d};
     });
   });
+  renderEventsBanner();
 
   const heroName = document.getElementById('heroName');
   const heroTime = document.getElementById('heroTime');
@@ -1460,7 +1473,7 @@ function renderHero(){
   heroName.textContent = CARRIERS[best.cid].label;
   heroTime.textContent = fmt(best.t);
   heroCD.textContent = fmtCD(diff);
-  heroSub.textContent = '';
+  heroSub.textContent = LIVE.effMin(best.cid, best.d) !== parseTime(best.d) ? 'Retardé — prévu ' + best.d : '';
   heroName.className = 'hero-name' + (diff <= 15 ? ' imminent' : '');
   heroCD.className = 'hero-countdown' + (diff <= 15 ? ' imminent' : '');
 
@@ -1521,8 +1534,8 @@ function renderCarriers(){
   let globalNextTime = null, globalNextCid = null;
   Object.keys(CARRIER_DEPS).forEach(function(cid){
     CARRIER_DEPS[cid].forEach(function(d){
-      const t = parseTime(d);
-      if(t > now && (globalNextTime === null || t < globalNextTime)){
+      const t = LIVE.effMin(cid, d);
+      if(t !== null && t > now && (globalNextTime === null || t < globalNextTime)){
         globalNextTime = t;
         globalNextCid = cid;
       }
@@ -1533,7 +1546,7 @@ function renderCarriers(){
   list.innerHTML = Object.keys(CARRIERS).map(function(cid){
     const c = CARRIERS[cid];
     const deps = CARRIER_DEPS[cid] || [];
-    const depMins = deps.map(parseTime);
+    const depMins = deps.map(function(d){ return LIVE.effMin(cid, d); }).filter(function(t){ return t !== null; });
     const upcoming = depMins.filter(function(t){ return t > now; });
     const past = depMins.filter(function(t){ return t <= now; });
     const isDone = upcoming.length === 0;
@@ -1548,11 +1561,14 @@ function renderCarriers(){
     else { statusText = ''; }
 
     const pillsHtml = deps.map(function(d){
-      const t = parseTime(d);
+      const t = LIVE.effMin(cid, d);
+      const e = LIVE.event(cid, d);
+      if(t === null) return '<span class="dep-pill dep-cancel">' + d + ' ✕</span>';
       let cls = 'dep-future';
       if(t <= now) cls = 'dep-past';
       else if(t === globalNextTime && cid === globalNextCid) cls = 'dep-THE-ONE';
-      return '<span class="dep-pill ' + cls + '">' + d + '</span>';
+      if(e && e.status === 'retard') cls += ' dep-late';
+      return '<span class="dep-pill ' + cls + '">' + (e && e.status === 'retard' ? LIVE.fmt(t) : d) + '</span>';
     }).join('');
 
     const nb = GARAGES_DATA.filter(function(g){ return g.carriers.some(function(car){ return car.id === cid; }); }).length;
@@ -1624,6 +1640,236 @@ function toggleCarrier(cid){
 
 function renderAll(){ renderHero(); renderTimeline(); renderCarriers(); renderTop(); checkNotifs(); }
 
+
+// ── TRANSPORTEURS DYNAMIQUES (cases à cocher des formulaires garage) ─────────
+function renderCarrierChecks(){
+  [['adminCarriersCheck','chk-','deps-'], ['editCarriersCheck','echk-','edeps-']].forEach(function(f){
+    const box = document.getElementById(f[0]);
+    box.innerHTML = Object.keys(CARRIERS).map(function(cid){
+      return '<div class="admin-carrier-row">' +
+        '<input type="checkbox" id="' + f[1] + cid + '">' +
+        '<label class="admin-carrier-label" for="' + f[1] + cid + '">' + CARRIERS[cid].label + '</label>' +
+        '<input class="admin-carrier-deps" id="' + f[2] + cid + '" placeholder="' + (CARRIER_DEPS[cid] || []).join(',') + '" disabled>' +
+        '</div>';
+    }).join('');
+    Object.keys(CARRIERS).forEach(function(cid){
+      const chk = document.getElementById(f[1] + cid), deps = document.getElementById(f[2] + cid);
+      chk.onchange = function(){ deps.disabled = !chk.checked; };
+    });
+  });
+}
+
+// ── RETARDS / ANNULATIONS ────────────────────────────────────────────────────
+function renderEventsBanner(){
+  const el = document.getElementById('eventsBanner');
+  const now = nowMin();
+  const evs = LIVE.events().filter(function(e){ return CARRIERS[e.cid] && LIVE.toMin(e.time) + (e.delay || 0) >= now - 30; })
+    .sort(function(a, b){ return LIVE.toMin(a.time) - LIVE.toMin(b.time); });
+  el.className = 'events-banner' + (evs.length ? ' show' : '');
+  el.innerHTML = evs.map(function(e){
+    const label = CARRIERS[e.cid].label;
+    return e.status === 'annule'
+      ? '<div class="ev-cancel">❌ ' + label + ' ' + e.time + ' : annulé</div>'
+      : '<div>⚠️ ' + label + ' ' + e.time + ' : retard ' + e.delay + ' min → part à ' + LIVE.fmt(LIVE.toMin(e.time) + e.delay) + '</div>';
+  }).join('');
+}
+
+function renderEventsAdmin(){
+  const list = document.getElementById('evList');
+  let rows = [];
+  Object.keys(CARRIER_DEPS).forEach(function(cid){
+    CARRIER_DEPS[cid].forEach(function(t){ rows.push({cid: cid, t: t}); });
+  });
+  rows.sort(function(a, b){ return LIVE.toMin(a.t) - LIVE.toMin(b.t); });
+  // On ne garde que les départs à venir (ou partis il y a moins de 30 min)
+  const now = nowMin();
+  rows = rows.filter(function(r){ const m = LIVE.effMin(r.cid, r.t); return (m === null ? LIVE.toMin(r.t) : m) >= now - 30; });
+  if(!rows.length){ list.innerHTML = '<em style="color:var(--muted);font-size:12px">Plus de départ aujourd\'hui</em>'; return; }
+  list.innerHTML = rows.map(function(r){
+    const e = LIVE.event(r.cid, r.t);
+    const state = !e ? '<span class="ev-state" style="color:var(--green)">à l\'heure</span>'
+      : e.status === 'annule' ? '<span class="ev-state" style="color:var(--red)">annulé</span>'
+      : '<span class="ev-state" style="color:var(--orange)">+' + e.delay + ' min</span>';
+    const delays = [10, 15, 20, 30, 45, 60, 90].map(function(d){ return '<option value="' + d + '">+' + d + ' min</option>'; }).join('');
+    return '<div class="admin-garage-item"><div class="ev-row" style="width:100%">' +
+      '<span class="ev-time">' + r.t + '</span>' +
+      '<span class="ev-label">' + CARRIERS[r.cid].label + '<br>' + state + '</span>' +
+      '<select onchange="if(this.value) setDepEvent(\'' + r.cid + '\',\'' + r.t + '\',\'retard\',+this.value)"><option value="">Retard…</option>' + delays + '</select>' +
+      (e && e.status === 'annule' ? '' : '<button onclick="setDepEvent(\'' + r.cid + '\',\'' + r.t + '\',\'annule\',0)">Annuler</button>') +
+      (e ? '<button onclick="setDepEvent(\'' + r.cid + '\',\'' + r.t + '\',\'normal\',0)">Rétablir</button>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+async function setDepEvent(cid, t, status, delay){
+  const label = CARRIERS[cid].label + ' ' + t;
+  const what = status === 'annule' ? 'annulé' : status === 'retard' ? 'en retard de ' + delay + ' min' : 'rétabli à l\'heure';
+  const msg = document.getElementById('evMsg');
+  if(!confirm(label + ' ' + what + ' ?\nToute l\'équipe recevra une notification.')){ renderEventsAdmin(); return; }
+  try {
+    await supaRpc('admin_set_event', {p_password: adminSessionPwd, p_day: LIVE.today(), p_carrier: cid, p_time: t, p_status: status, p_delay: delay});
+    fetch(PUSH_FN, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'event', password: adminSessionPwd, carrier: cid, time: t})}).catch(function(){});
+    await LIVE.refresh();
+    renderAllKeepOpen();
+    renderEventsAdmin();
+    msg.textContent = '✓ ' + label + ' ' + what + ' — équipe prévenue';
+    msg.className = 'admin-msg ok';
+  } catch(e) {
+    msg.textContent = 'Erreur : ' + e.message;
+    msg.className = 'admin-msg err';
+  }
+}
+
+// ── TRANSPORTEURS & HORAIRES ─────────────────────────────────────────────────
+let carrierRows = [];
+
+function normTime(v){
+  const m = String(v).trim().toLowerCase().match(/^(\d{1,2})\s*[h:.]?\s*(\d{2})$/);
+  if(!m) return null;
+  const h = parseInt(m[1]), mn = parseInt(m[2]);
+  if(h > 23 || mn > 59) return null;
+  return String(h).padStart(2, '0') + 'h' + String(mn).padStart(2, '0');
+}
+
+function carrierCard(r, i){
+  const times = r.deps.map(function(t){
+    return '<span class="car-time"><input value="' + t + '" data-orig="' + t + '" inputmode="numeric"><button title="Retirer" onclick="this.parentNode.remove()">×</button></span>';
+  }).join('');
+  return '<div class="car-card' + (r.active ? '' : ' off') + '" data-i="' + i + '">' +
+    '<div class="car-head">' +
+      '<input type="color" value="' + (r.color || '#c0c0c0') + '" title="Couleur">' +
+      '<input type="text" value="' + String(r.label).replace(/"/g, '&quot;') + '" placeholder="Nom du transporteur">' +
+      '<label><input type="checkbox"' + (r.active ? ' checked' : '') + '> actif</label>' +
+    '</div>' +
+    '<div class="car-times">' + times +
+      '<button class="car-add-time" onclick="addTimeInput(this)">+ horaire</button></div>' +
+    '<button class="admin-btn" onclick="saveCarrier(' + i + ')">ENREGISTRER</button>' +
+    '</div>';
+}
+
+function addTimeInput(btn){
+  const span = document.createElement('span');
+  span.className = 'car-time';
+  span.innerHTML = '<input value="" placeholder="00h00" data-orig="" inputmode="numeric"><button title="Retirer" onclick="this.parentNode.remove()">×</button>';
+  btn.parentNode.insertBefore(span, btn);
+  span.querySelector('input').focus();
+}
+
+async function renderCarrierEditor(){
+  const box = document.getElementById('carrierEditor');
+  try { carrierRows = await supaFetch('carriers?select=id,label,deps,color,active,sort&order=sort'); }
+  catch(e) { box.innerHTML = '<em style="color:var(--muted);font-size:12px">Hors ligne : impossible de modifier les horaires</em>'; return; }
+  box.innerHTML = carrierRows.map(carrierCard).join('');
+}
+
+function addCarrierRow(){
+  carrierRows.push({id: '', label: '', deps: [], color: '#40c0e0', active: true});
+  const box = document.getElementById('carrierEditor');
+  box.insertAdjacentHTML('beforeend', carrierCard(carrierRows[carrierRows.length - 1], carrierRows.length - 1));
+  box.lastElementChild.querySelector('input[type=text]').focus();
+}
+
+async function saveCarrier(i){
+  const r = carrierRows[i];
+  const card = document.querySelector('.car-card[data-i="' + i + '"]');
+  const msg = document.getElementById('carMsg');
+  const label = card.querySelector('input[type=text]').value.trim();
+  if(!label){ msg.textContent = 'Donne un nom au transporteur'; msg.className = 'admin-msg err'; return; }
+  const deps = [], renames = {};
+  const inputs = card.querySelectorAll('.car-time input');
+  for(let k = 0; k < inputs.length; k++){
+    const raw = inputs[k].value.trim(), orig = inputs[k].dataset.orig;
+    if(!raw) continue;
+    const t = normTime(raw);
+    if(!t){ msg.textContent = 'Horaire pas compris : « ' + raw + ' » (écris par ex. 09h30)'; msg.className = 'admin-msg err'; inputs[k].focus(); return; }
+    deps.push(t);
+    if(orig && orig !== t) renames[orig] = t;
+  }
+  let id = r.id;
+  if(!id){
+    id = normalize(label).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'transporteur';
+    while(carrierRows.some(function(o){ return o.id === id; })) id += '_2';
+  }
+  try {
+    await supaRpc('admin_save_carrier', {p_password: adminSessionPwd, p_id: id, p_label: label, p_deps: deps,
+      p_color: card.querySelector('input[type=color]').value, p_active: card.querySelector('input[type=checkbox]').checked, p_renames: renames});
+    await LIVE.refresh();
+    renderAllKeepOpen();
+    renderCarrierChecks();
+    renderEventsAdmin();
+    renderCarrierEditor();
+    const n = Object.keys(renames).length;
+    msg.textContent = '✓ ' + label + ' enregistré' + (n ? ' — ' + n + ' horaire' + (n > 1 ? 's' : '') + ' mis à jour dans les garages' : '');
+    msg.className = 'admin-msg ok';
+  } catch(e) {
+    msg.textContent = 'Erreur : ' + e.message;
+    msg.className = 'admin-msg err';
+  }
+}
+
+// ── MESSAGE À L'ÉQUIPE ───────────────────────────────────────────────────────
+async function adminBroadcast(){
+  const text = document.getElementById('bcText').value.trim();
+  const msg = document.getElementById('bcMsg');
+  if(!text){ document.getElementById('bcText').focus(); return; }
+  if(!confirm('Envoyer à toute l\'équipe :\n« ' + text + ' » ?')) return;
+  try {
+    const res = await fetch(PUSH_FN, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'broadcast', password: adminSessionPwd, message: text})});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'erreur ' + res.status);
+    document.getElementById('bcText').value = '';
+    msg.textContent = '✓ Envoyé à ' + data.sent + ' téléphone' + (data.sent > 1 ? 's' : '');
+    msg.className = 'admin-msg ok';
+  } catch(e) {
+    msg.textContent = 'Erreur : ' + e.message;
+    msg.className = 'admin-msg err';
+  }
+}
+
+// ── STATS ────────────────────────────────────────────────────────────────────
+async function renderStats(){
+  const box = document.getElementById('statsBox');
+  let st;
+  try { st = await supaRpc('admin_stats', {p_password: adminSessionPwd, p_days: 7}); if(!st) throw new Error('vide'); }
+  catch(e) { box.innerHTML = '<em style="color:var(--muted);font-size:12px">Impossible de charger les stats</em>'; return; }
+  function bars(list, nameOf){
+    const max = Math.max.apply(null, list.map(function(x){ return x.n; }).concat([1]));
+    return list.map(function(x){
+      return '<div class="stat-line"><span class="stat-name">' + String(nameOf(x)).replace(/</g, '&lt;') + '</span>' +
+        '<span class="stat-bar"><span style="width:' + Math.round(x.n / max * 100) + '%"></span></span>' +
+        '<span class="stat-n">' + x.n + '</span></div>';
+    }).join('') || '<em style="color:var(--muted);font-size:12px">Pas encore de données</em>';
+  }
+  const hours = [];
+  for(let h = 6; h <= 19; h++){
+    const f = st.hours.find(function(x){ return x.h === h; });
+    hours.push({h: h, n: f ? f.n : 0});
+  }
+  box.innerHTML =
+    '<div style="font-size:13px">Aujourd\'hui : <b>' + st.today + '</b> recherche' + (st.today > 1 ? 's' : '') +
+    ' · 7 jours : <b>' + st.total + '</b></div>' +
+    '<div class="stat-sub">Garages les plus demandés</div>' + bars(st.garages, function(x){ return x.name; }) +
+    '<div class="stat-sub">Heures les plus chargées</div>' + bars(hours, function(x){ return x.h + 'h'; }) +
+    '<div class="stat-sub">Par personne</div>' + bars(st.people, function(x){ return x.name; });
+}
+
+// ── HORS LIGNE ───────────────────────────────────────────────────────────────
+function renderOfflineBar(){
+  const el = document.getElementById('offlineBar');
+  if(navigator.onLine){ el.className = 'offline-bar'; return; }
+  const sync = LIVE.lastSync();
+  el.textContent = '📶 Hors ligne — horaires enregistrés' + (sync ? ' le ' + new Date(sync).toLocaleString('fr-FR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : '');
+  el.className = 'offline-bar show';
+}
+window.addEventListener('offline', renderOfflineBar);
+window.addEventListener('online', function(){
+  renderOfflineBar();
+  LIVE.refresh().then(function(){ renderAllKeepOpen(); });
+  if(window.loadGaragesFromSupabase) window.loadGaragesFromSupabase();
+});
+
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 
 let teamTimer = null;
@@ -1640,7 +1886,7 @@ function timeAgo(iso) {
 async function renderTeam() {
   const list = document.getElementById('teamList');
   let team;
-  try { team = await supaRpc('admin_team', {p_password: adminSessionPwd}); }
+  try { team = (await supaRpc('admin_team', {p_password: adminSessionPwd})) || []; }
   catch(e) { list.innerHTML = '<em style="color:var(--muted);font-size:12px">Impossible de charger l\'équipe</em>'; return; }
   const online = team.filter(function(m){ return m.online; }).length;
   document.getElementById('teamCount').textContent = online ? '· ' + online + ' en ligne' : '';
@@ -1683,12 +1929,10 @@ async function checkAdminPwd(){
     document.getElementById('adminLogin').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     renderAdminList();
-    // Enable/disable deps inputs based on checkboxes
-    ['serge','lande','pb','bearn','hendaye','ace'].forEach(function(cid){
-      const chk = document.getElementById('chk-'+cid);
-      const deps = document.getElementById('deps-'+cid);
-      chk.addEventListener('change', function(){ deps.disabled = !chk.checked; });
-    });
+    renderCarrierChecks();
+    renderEventsAdmin();
+    renderCarrierEditor();
+    renderStats();
   } else {
     msg.textContent = 'Mot de passe incorrect';
     msg.className = 'admin-msg err';
@@ -1701,7 +1945,7 @@ function adminAddGarage(){
   if(!name){ msg.textContent = 'Saisis un nom de garage'; msg.className = 'admin-msg err'; return; }
 
   const carriers = [];
-  ['serge','lande','pb','bearn','hendaye','ace'].forEach(function(cid){
+  Object.keys(CARRIERS).forEach(function(cid){
     const chk = document.getElementById('chk-'+cid);
     if(chk.checked){
       const depsVal = document.getElementById('deps-'+cid).value.trim();
@@ -1728,7 +1972,7 @@ function adminAddGarage(){
 
   // Reset form
   document.getElementById('adminGarageName').value = '';
-  ['serge','lande','pb','bearn','hendaye','ace'].forEach(function(cid){
+  Object.keys(CARRIERS).forEach(function(cid){
     document.getElementById('chk-'+cid).checked = false;
     document.getElementById('deps-'+cid).value = '';
     document.getElementById('deps-'+cid).disabled = true;
@@ -1775,15 +2019,7 @@ function adminEditGarage(name){
   document.getElementById('editGarageName').textContent = name;
 
   // Reset all
-  ['serge','lande','pb','bearn','hendaye','ace'].forEach(function(cid){
-    const chk = document.getElementById('echk-'+cid);
-    const deps = document.getElementById('edeps-'+cid);
-    chk.checked = false;
-    deps.value = '';
-    deps.disabled = true;
-    // Re-attach listener
-    chk.onchange = function(){ deps.disabled = !chk.checked; };
-  });
+  renderCarrierChecks();
 
   // Fill with current data
   gd.carriers.forEach(function(c){
@@ -1806,7 +2042,7 @@ function adminSaveEdit(){
   const msg = document.getElementById('adminEditMsg');
 
   const carriers = [];
-  ['serge','lande','pb','bearn','hendaye','ace'].forEach(function(cid){
+  Object.keys(CARRIERS).forEach(function(cid){
     const chk = document.getElementById('echk-'+cid);
     if(chk.checked){
       const depsVal = document.getElementById('edeps-'+cid).value.trim();
@@ -1875,7 +2111,13 @@ window.GARAGES_DATA_REF = GARAGES_DATA;
 window.renderCarriers = renderCarriers;
 window.renderTop = renderTop;
 
+try { const cachedGarages = JSON.parse(localStorage.getItem('garages_cache') || 'null'); if(cachedGarages) applyGarageRows(cachedGarages); } catch(e) {}
 renderAllKeepOpen();
+renderOfflineBar();
+LIVE.refresh().then(function(){ renderAllKeepOpen(); });
+setInterval(function(){
+  LIVE.refresh().then(function(changed){ if(changed) renderAllKeepOpen(); });
+}, 60000);
 setInterval(renderClock, 1000);
 setInterval(function(){ if(searchInput.value) doSearch(searchInput.value); }, 30000);
 setInterval(renderAllKeepOpen, 15000);
