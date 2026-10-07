@@ -35,6 +35,14 @@ body {
 .top { display:flex; align-items:baseline; justify-content:space-between; }
 .top-title { font-family:'Bebas Neue',sans-serif; font-size:calc(var(--u)*5); letter-spacing:.15em; color:var(--muted); }
 .top-date { font-family:'DM Mono',monospace; font-size:calc(var(--u)*2.6); color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
+.top-left { display:flex; align-items:center; gap:calc(var(--u)*2.5); }
+/* Retour à l'app : indispensable quand la page est ouverte depuis l'icône de l'écran d'accueil */
+.back {
+  font-family:'DM Mono',monospace; font-size:max(14px, calc(var(--u)*2.4)); letter-spacing:.1em;
+  color:var(--muted); text-decoration:none; white-space:nowrap; cursor:pointer;
+  border:1px solid var(--border); border-radius:8px; padding:max(8px, calc(var(--u)*1)) max(12px, calc(var(--u)*1.8));
+}
+.back:hover { color:var(--text); border-color:var(--muted); }
 .top-clock { font-family:'DM Mono',monospace; font-size:calc(var(--u)*6); font-weight:500; }
 
 /* ── CORPS : prochain départ à gauche, suivants à droite ── */
@@ -105,6 +113,9 @@ body {
   body { overflow:auto; cursor:auto; }
   .screen { height:auto; min-height:100vh; }
   .main { grid-template-columns:1fr; }
+  .top { align-items:center; gap:12px; }
+  .top-title { font-size:calc(var(--u)*4); }
+  .top-clock { font-size:calc(var(--u)*4.5); }
   .next { gap:calc(var(--u)*3); }
   .rows { overflow:visible; }
   .past { flex-wrap:wrap; white-space:normal; }
@@ -115,9 +126,12 @@ body {
 <div class="screen">
 
   <div class="top">
-    <div>
+    <div class="top-left">
+      <a class="back" href="./" aria-label="Retour à l'accueil">← Accueil</a>
+      <div>
       <div class="top-title">Départs du jour</div>
       <div class="top-date" id="date"></div>
+      </div>
     </div>
     <div class="top-clock" id="clock">--:--:--</div>
   </div>
