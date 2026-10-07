@@ -988,8 +988,7 @@ async function supaFetch(path, method, body) {
 // Stats partagées
 window.incStatShared = async function(name) {
   try {
-    await supaFetch('stats?on_conflict=name', 'POST', {name: name, count: 1});
-    // Upsert via RPC pour incrémenter
+    // increment_stat crée la ligne si besoin puis ajoute 1
     await fetch(SUPA_URL + '/rest/v1/rpc/increment_stat', {
       method: 'POST',
       headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json'},
@@ -1023,17 +1022,42 @@ window.getTotalSearchCount = async function() {
   } catch(e) { return 0; }
 };
 
-// Garages admin
+// Garages admin : la base n'accepte les modifications qu'avec le mot de passe admin,
+// vérifié côté serveur (fonctions admin_* dans Supabase)
+let adminSessionPwd = '';
+
+async function supaRpc(fn, args) {
+  const res = await fetch(SUPA_URL + '/rest/v1/rpc/' + fn, {
+    method: 'POST',
+    headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json'},
+    body: JSON.stringify(args || {})
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if(!res.ok) throw new Error((data && data.message) || ('erreur ' + res.status));
+  return data;
+}
+
+window.adminCheckPassword = async function(pwd) {
+  return await supaRpc('admin_check', {p_password: pwd}) === true;
+};
+
 window.saveGarageToSupabase = async function(name, carriers) {
   try {
-    await supaFetch('garages?on_conflict=name', 'POST', {name: name, carriers: JSON.stringify(carriers)});
-  } catch(e) { console.log('Supabase error:', e); }
+    await supaRpc('admin_save_garage', {p_password: adminSessionPwd, p_name: name, p_carriers: JSON.stringify(carriers)});
+  } catch(e) {
+    console.log('Supabase error:', e);
+    alert('⚠️ « ' + name + ' » n\'a pas été enregistré en ligne : ' + e.message);
+  }
 };
 
 window.deleteGarageFromSupabase = async function(name) {
   try {
-    await supaFetch('garages?name=eq.' + encodeURIComponent(name), 'DELETE');
-  } catch(e) { console.log('Supabase error:', e); }
+    await supaRpc('admin_delete_garage', {p_password: adminSessionPwd, p_name: name});
+  } catch(e) {
+    console.log('Supabase error:', e);
+    alert('⚠️ « ' + name + ' » n\'a pas été supprimé en ligne : ' + e.message);
+  }
 };
 
 // ── ALERTES DÉPART (notifications push, même app fermée) ─────────────────────
@@ -1507,7 +1531,6 @@ function toggleCarrier(cid){
 function renderAll(){ renderHero(); renderTimeline(); renderCarriers(); renderTop(); checkNotifs(); }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
-const ADMIN_PWD = 'livraisonont@p';
 
 function openAdmin(){
   document.getElementById('adminOverlay').classList.add('show');
@@ -1517,11 +1540,21 @@ function openAdmin(){
   document.getElementById('adminLoginMsg').className = 'admin-msg';
 }
 function closeAdmin(){
+  adminSessionPwd = '';
   document.getElementById('adminOverlay').classList.remove('show');
 }
-function checkAdminPwd(){
+async function checkAdminPwd(){
   const pwd = document.getElementById('adminPwd').value;
-  if(pwd === ADMIN_PWD){
+  const msg = document.getElementById('adminLoginMsg');
+  let ok = false;
+  try { ok = await window.adminCheckPassword(pwd); }
+  catch(e) {
+    msg.textContent = 'Connexion impossible, réessaie';
+    msg.className = 'admin-msg err';
+    return;
+  }
+  if(ok){
+    adminSessionPwd = pwd;
     document.getElementById('adminLogin').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     renderAdminList();
@@ -1532,7 +1565,6 @@ function checkAdminPwd(){
       chk.addEventListener('change', function(){ deps.disabled = !chk.checked; });
     });
   } else {
-    const msg = document.getElementById('adminLoginMsg');
     msg.textContent = 'Mot de passe incorrect';
     msg.className = 'admin-msg err';
   }
