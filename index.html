@@ -66,6 +66,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 }
 
 /* Heure en haut à droite, bien contrastée */
+.sound-hint { display: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; background: var(--blue); color: #fff; }
+.sound-hint.show { display: block; }
 .offline-bar, .events-banner { display: none; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; line-height: 1.6; }
 .offline-bar.show { display: block; background: var(--surface2); color: var(--muted); border-bottom: 1px solid var(--border); }
 .events-banner.show { display: block; background: rgba(245,144,32,.12); color: var(--orange); border-bottom: 1px solid rgba(245,144,32,.4); }
@@ -855,6 +857,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 
 <div class="imminent-banner" id="imminentBanner"></div>
 <div class="offline-bar" id="offlineBar"></div>
+<div class="sound-hint" id="soundHint" onclick="SOUND.unlock()">🔊 Touche ici pour activer le son des alertes</div>
 <div class="events-banner" id="eventsBanner"></div>
 
 <div class="hero">
@@ -885,6 +888,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 <button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
 <div class="alert-msg" id="alertMsg"></div>
 <div class="me-line" id="meLine"></div>
+<div class="me-line" id="soundLine"></div>
 
 <div class="search-wrap">
   <div class="search-box">
@@ -1304,6 +1308,12 @@ function checkNotifs(){
         if(window.Notification && Notification.permission === 'granted')
           try { new Notification('⏰ Départ dans 30 min', {body: CARRIERS[cid].label + ' part à ' + d}); } catch(e) {}
       }
+      const k5 = cid+d+t+'5', weekday = new Date().getDay() % 6 !== 0;
+      if(diff > 0 && diff <= 5 && !notified.has(k5)){
+        notified.add(k5); notified.add(k15); notified.add(k30);
+        if(weekday) SOUND.bips();
+        showToast('🚨 DÉPART DANS ' + diff + ' MIN', CARRIERS[cid].label + ' — ' + LIVE.fmt(t), true);
+      }
       if(diff > 0 && diff <= 15 && !notified.has(k15)){
         notified.add(k15);
         showToast('🚨 DÉPART IMMINENT', CARRIERS[cid].label + ' — ' + d + ' — ' + diff + ' MIN', true);
@@ -1640,6 +1650,77 @@ function toggleCarrier(cid){
 
 function renderAll(){ renderHero(); renderTimeline(); renderCarriers(); renderTop(); checkNotifs(); }
 
+
+// ── SON DES ALERTES (dans le casque / les haut-parleurs du PC) ───────────────
+// Joué par l'app elle-même tant qu'elle est ouverte. Les navigateurs bloquent le son
+// tant qu'on n'a pas touché la page : un bandeau bleu le rappelle.
+const SOUND = (function(){
+  let ctx = null;
+  function audio(){
+    if(!ctx){ const C = window.AudioContext || window.webkitAudioContext; if(!C) return null; ctx = new C(); }
+    return ctx;
+  }
+  function tone(freq, at, dur, type, vol){
+    const c = audio(), o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(at); o.stop(at + dur + 0.05);
+  }
+  function ready(){ const c = audio(); return c && c.state === 'running'; }
+  return {
+    // Activé par défaut sur ordinateur, coupé par défaut sur téléphone (la notification sonne déjà)
+    enabled: function(){
+      try { const v = localStorage.getItem('soundOn'); if(v !== null) return v === '1'; } catch(e) {}
+      return !/iPhone|iPad|iPod|Android/.test(navigator.userAgent);
+    },
+    set: function(on){ try { localStorage.setItem('soundOn', on ? '1' : '0'); } catch(e) {} renderSound(); },
+    ready: ready,
+    unlock: function(){ const c = audio(); if(c && c.state !== 'running') c.resume().then(renderSound); else renderSound(); },
+    // Départ dans 5 min : 3 bips courts
+    bips: function(force){
+      if(!force && !this.enabled()) return; if(!ready()) return;
+      const t = ctx.currentTime + 0.05;
+      [0, 0.22, 0.44].forEach(function(d){ tone(880, t + d, 0.14, 'sine', 0.25); });
+    },
+    // Retard / annulation : deux tons plus graves, deux fois
+    alerte: function(force){
+      if(!force && !this.enabled()) return; if(!ready()) return;
+      const t = ctx.currentTime + 0.05;
+      [660, 440, 660, 440].forEach(function(f, i){ tone(f, t + i * 0.3, 0.26, 'triangle', 0.22); });
+    },
+  };
+})();
+
+function renderSound(){
+  const on = SOUND.enabled();
+  document.getElementById('soundLine').innerHTML = on
+    ? '🔊 Son activé · <button onclick="SOUND.set(false)">couper</button> · <button onclick="SOUND.unlock();setTimeout(function(){SOUND.bips(true)},150)">bip départ</button> · <button onclick="SOUND.unlock();setTimeout(function(){SOUND.alerte(true)},150)">bip retard</button>'
+    : '🔇 Son coupé · <button onclick="SOUND.set(true);SOUND.unlock()">activer</button>';
+  document.getElementById('soundHint').className = 'sound-hint' + (on && !SOUND.ready() ? ' show' : '');
+}
+// Le premier clic ou la première touche n'importe où débloque le son
+['pointerdown', 'keydown', 'touchstart'].forEach(function(ev){
+  document.addEventListener(ev, function(){ if(!SOUND.ready()) SOUND.unlock(); }, {passive: true});
+});
+
+// Retards / annulations arrivés depuis le dernier rafraîchissement → son + message à l'écran
+let knownEvents = null;
+function checkNewEvents(){
+  const evs = LIVE.events().filter(function(e){ return CARRIERS[e.cid]; });
+  const keys = evs.map(function(e){ return e.cid + e.time + e.status + e.delay; });
+  if(knownEvents){
+    const fresh = evs.filter(function(e, i){ return knownEvents.indexOf(keys[i]) === -1; });
+    if(fresh.length){
+      const e = fresh[0], label = CARRIERS[e.cid].label + ' ' + e.time;
+      SOUND.alerte();
+      showToast(e.status === 'annule' ? '❌ DÉPART ANNULÉ' : '⚠️ RETARD ' + e.delay + ' MIN', e.status === 'annule' ? label : label + ' → ' + LIVE.fmt(LIVE.toMin(e.time) + e.delay), true);
+    }
+  }
+  knownEvents = keys;
+}
 
 // ── TRANSPORTEURS DYNAMIQUES (cases à cocher des formulaires garage) ─────────
 function renderCarrierChecks(){
@@ -2114,9 +2195,10 @@ window.renderTop = renderTop;
 try { const cachedGarages = JSON.parse(localStorage.getItem('garages_cache') || 'null'); if(cachedGarages) applyGarageRows(cachedGarages); } catch(e) {}
 renderAllKeepOpen();
 renderOfflineBar();
-LIVE.refresh().then(function(){ renderAllKeepOpen(); });
+renderSound();
+LIVE.refresh().then(function(){ renderAllKeepOpen(); checkNewEvents(); });
 setInterval(function(){
-  LIVE.refresh().then(function(changed){ if(changed) renderAllKeepOpen(); });
+  LIVE.refresh().then(function(changed){ if(changed){ renderAllKeepOpen(); checkNewEvents(); } });
 }, 60000);
 setInterval(renderClock, 1000);
 setInterval(function(){ if(searchInput.value) doSearch(searchInput.value); }, 30000);
