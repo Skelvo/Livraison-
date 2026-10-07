@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Départs Livraison</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Départs">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e0c0c">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 
@@ -74,6 +81,32 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
   border-radius: 10px;
 }
 .board-link:hover { border-color: var(--accent); }
+.alert-btn {
+  display: block;
+  width: calc(100% - 40px);
+  margin: 10px 20px 0;
+  padding: 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #fff;
+  background: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.alert-btn.on { background: var(--surface); color: var(--green); border-color: var(--border); }
+.alert-msg {
+  margin: 8px 20px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}
+.alert-msg:empty { display: none; }
+@media (min-width: 1180px) {
+  .board-link, .alert-btn, .alert-msg { max-width: 1100px; margin-left: auto; margin-right: auto; }
+}
 .hero-clock {
   position: absolute;
   top: 18px; right: 20px;
@@ -789,6 +822,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 </div>
 
 <a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
+<button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
+<div class="alert-msg" id="alertMsg"></div>
 
 <div class="search-wrap">
   <div class="search-box">
@@ -1001,6 +1036,78 @@ window.deleteGarageFromSupabase = async function(name) {
   } catch(e) { console.log('Supabase error:', e); }
 };
 
+// ── ALERTES DÉPART (notifications push, même app fermée) ─────────────────────
+const VAPID_PUBLIC = 'BE9iY392C8SmIfPddCcGMEu3PHettQitd41RCKx8om6ZQJ_iEhQizvOPoEJ0xGBJQPOrlMqCFpJTloC0SCdISQw';
+const PUSH_FN = SUPA_URL + '/functions/v1/departs-push';
+
+function b64urlToBytes(s) {
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, function(c){ return c.charCodeAt(0); });
+}
+
+function setAlertUI(on, msg) {
+  const btn = document.getElementById('alertBtn');
+  if(!btn) return;
+  btn.className = 'alert-btn' + (on ? ' on' : '');
+  btn.textContent = on ? '🔔 ALERTES DÉPART ACTIVÉES' : '🔔 ACTIVER LES ALERTES DÉPART';
+  document.getElementById('alertMsg').textContent = msg || '';
+}
+
+async function savePushSubscription(sub) {
+  const k = sub.toJSON().keys;
+  const res = await fetch(SUPA_URL + '/rest/v1/rpc/save_push_subscription', {
+    method: 'POST',
+    headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json'},
+    body: JSON.stringify({p_endpoint: sub.endpoint, p_p256dh: k.p256dh, p_auth: k.auth, p_user_agent: navigator.userAgent})
+  });
+  if(!res.ok) throw new Error('enregistrement refusé (' + res.status + ')');
+}
+
+window.enableAlerts = async function() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  if(!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) {
+    setAlertUI(false, isIOS && !standalone
+      ? "Sur iPhone : ouvre l'app depuis son icône sur l'écran d'accueil (Safari → Partager → « Sur l'écran d'accueil »). Si tu l'avais déjà, supprime l'ancienne icône et rajoute-la."
+      : "Ce téléphone ou ce navigateur ne gère pas les alertes.");
+    return;
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted') {
+      setAlertUI(false, 'Notifications refusées. Pour les autoriser : Réglages → Notifications → Départs.');
+      return;
+    }
+    setAlertUI(false, 'Activation…');
+    const reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) ||
+      (await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64urlToBytes(VAPID_PUBLIC)}));
+    await savePushSubscription(sub);
+    setAlertUI(true, 'Tu recevras une alerte 5 min avant chaque départ (sauf le dimanche).');
+    // Notification de confirmation, pour vérifier tout de suite que ça marche
+    fetch(PUSH_FN, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'welcome', endpoint: sub.endpoint})}).catch(function(){});
+  } catch(e) {
+    console.log('Alertes :', e);
+    setAlertUI(false, "Impossible d'activer les alertes : " + e.message);
+  }
+};
+
+// Au lancement : si déjà abonné, on le confirme (et on rafraîchit l'abonnement côté serveur)
+(async function() {
+  try {
+    if(!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) return;
+    if(Notification.permission !== 'granted') return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    if(!sub) return;
+    setAlertUI(true, '');
+    savePushSubscription(sub).catch(function(){});
+  } catch(e) {}
+})();
+
 window.loadGaragesFromSupabase = async function() {
   try {
     const data = await supaFetch('garages?select=name,carriers');
@@ -1066,13 +1173,13 @@ function checkNotifs(){
         notified.add(k30);
         showToast('⏰ Départ dans 30 min', CARRIERS[cid].label + ' — ' + d, false);
         if(window.Notification && Notification.permission === 'granted')
-          new Notification('⏰ Départ dans 30 min', {body: CARRIERS[cid].label + ' part à ' + d});
+          try { new Notification('⏰ Départ dans 30 min', {body: CARRIERS[cid].label + ' part à ' + d}); } catch(e) {}
       }
       if(diff > 0 && diff <= 15 && !notified.has(k15)){
         notified.add(k15);
         showToast('🚨 DÉPART IMMINENT', CARRIERS[cid].label + ' — ' + d + ' — ' + diff + ' MIN', true);
         if(window.Notification && Notification.permission === 'granted')
-          new Notification('🚨 DÉPART IMMINENT', {body: CARRIERS[cid].label + ' dans ' + diff + ' min !'});
+          try { new Notification('🚨 DÉPART IMMINENT', {body: CARRIERS[cid].label + ' dans ' + diff + ' min !'}); } catch(e) {}
       }
     });
   });
