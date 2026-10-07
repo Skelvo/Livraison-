@@ -75,6 +75,27 @@ function parisNow() {
   };
 }
 
+// Jours fériés en France (date au format AAAA-MM-JJ)
+function holidays(year: number): Set<string> {
+  // Dimanche de Pâques (algorithme de Meeus)
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  const easter = Date.UTC(year, month - 1, day);
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const plus = (n: number) => iso(easter + n * 864e5);
+  return new Set([
+    `${year}-01-01`, `${year}-05-01`, `${year}-05-08`, `${year}-07-14`,
+    `${year}-08-15`, `${year}-11-01`, `${year}-11-11`, `${year}-12-25`,
+    plus(1),  // lundi de Pâques
+    plus(39), // Ascension
+    plus(50), // lundi de Pentecôte
+  ]);
+}
+
 const parseTime = (s: string) => {
   const [h, m] = s.split("h");
   return parseInt(h) * 60 + parseInt(m || "0");
@@ -131,6 +152,7 @@ Deno.serve(async (req) => {
       if (req.headers.get("x-cron-secret") !== cfg.cron_secret) return json({ error: "interdit" }, 403);
       const now = parisNow();
       if (now.weekday === "Sun") return json({ skipped: "dimanche" });
+      if (holidays(parseInt(now.date)).has(now.date)) return json({ skipped: "jour férié" });
 
       const schedule = await loadSchedule();
       // "at" (ex. "11h10") permet de tester un horaire précis

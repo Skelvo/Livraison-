@@ -27,7 +27,7 @@ body {
   overflow:hidden; cursor:none;
 }
 .screen {
-  height:100vh; display:grid; grid-template-rows:auto 1fr auto;
+  height:100vh; display:grid; grid-template-rows:auto 1fr auto auto;
   padding:calc(var(--u)*3) calc(var(--u)*4); gap:calc(var(--u)*2.5);
 }
 
@@ -60,7 +60,7 @@ body {
 .next.soon { border-color:var(--orange); }
 .next.urgent { border-color:var(--red); animation:pulse 1.2s infinite; }
 @keyframes pulse { 0%,100%{background:var(--surface)} 50%{background:#3a1414} }
-.next-time { font-family:'Bebas Neue',sans-serif; font-size:calc(var(--u)*26); line-height:.85; letter-spacing:.02em; }
+.next-time { font-family:'Bebas Neue',sans-serif; font-size:calc(var(--u)*22); line-height:.85; letter-spacing:.02em; }
 .next-who { display:flex; flex-direction:column; gap:calc(var(--u)*1.5); align-items:flex-start; }
 .next-who .pill { font-size:calc(var(--u)*4.8); padding:calc(var(--u)*.8) calc(var(--u)*2.6); }
 .next-cd { font-family:'Bebas Neue',sans-serif; font-size:calc(var(--u)*11); line-height:1; color:var(--green); }
@@ -97,6 +97,27 @@ body {
 .pill-bearn   { background:#3d2c10; color:#d09040; border-color:#5a4020; }
 .pill-hendaye { background:#2c1a3d; color:#9060e0; border-color:#40286a; }
 .pill-ace     { background:#2a2a2a; color:#d0d0d0; border-color:#555; }
+
+/* ── BANDEAU : garages du prochain départ, qui défilent ── */
+.ticker {
+  display:flex; align-items:center; gap:calc(var(--u)*2); overflow:hidden; min-height:calc(var(--u)*6);
+  background:var(--surface); border:calc(var(--u)*.3) solid var(--border); border-radius:calc(var(--u)*1.5);
+  padding:0 0 0 calc(var(--u)*2.5);
+}
+.ticker:empty { display:none; }
+.ticker-label {
+  flex-shrink:0; font-family:'DM Mono',monospace; font-size:calc(var(--u)*2.4); letter-spacing:.2em;
+  color:var(--muted); text-transform:uppercase; white-space:nowrap;
+}
+.ticker-track {
+  flex:1; overflow:hidden; white-space:nowrap;
+  -webkit-mask-image:linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+          mask-image:linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+}
+.ticker-move { display:inline-block; animation:defile linear infinite; will-change:transform; }
+.ticker-move span { font-size:calc(var(--u)*3.4); font-weight:600; padding:0 calc(var(--u)*1.6); }
+.ticker-move span::after { content:'·'; color:var(--muted); padding-left:calc(var(--u)*3.2); }
+@keyframes defile { from { transform:translateX(0); } to { transform:translateX(-50%); } }
 
 /* ── BAS : départs déjà partis ── */
 .past {
@@ -144,6 +165,8 @@ body {
     </div>
   </div>
 
+  <div class="ticker" id="ticker"></div>
+
   <div class="past" id="past"></div>
 
 </div>
@@ -182,11 +205,29 @@ function pill(cid){ return '<span class="pill pill-' + cid + '">' + CARRIERS[cid
 function urgency(diff){ return diff <= 15 ? 'urgent' : diff <= 30 ? 'soon' : ''; }
 function plural(n, w){ return n + ' ' + w + (n > 1 ? 's' : ''); }
 
-function garageCount(cid, time){
+function garagesFor(cid, time){
   return GARAGES_DATA.filter(function(g){
     return g.carriers.some(function(c){ return c.id === cid && c.deps.indexOf(time) !== -1; });
-  }).length;
+  }).map(function(g){ return g.g; });
 }
+function garageCount(cid, time){ return garagesFor(cid, time).length; }
+
+// Bandeau qui fait défiler les garages du prochain départ.
+// On ne le reconstruit que si la liste change, sinon le défilement repartirait de zéro chaque minute.
+let tickerKey = '';
+function renderTicker(time, names){
+  const el = document.getElementById('ticker');
+  const key = time + '|' + names.join('|');
+  if(key === tickerKey) return;
+  tickerKey = key;
+  if(!names.length){ el.innerHTML = ''; return; }
+  const items = names.map(function(n){ return '<span>' + esc(n) + '</span>'; }).join('');
+  el.innerHTML = '<div class="ticker-label">Garages du ' + time + '</div>' +
+    '<div class="ticker-track"><div class="ticker-move">' + items + items + '</div></div>';
+  // Vitesse constante quelle que soit la longueur de la liste (~4 s par garage)
+  el.querySelector('.ticker-move').style.animationDuration = Math.max(20, names.length * 4) + 's';
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
 // Tous les départs de la journée, triés par heure
 function allDepartures(){
@@ -218,8 +259,12 @@ function render(){
       '<div class="next-who">' + first.map(function(d){ return pill(d.cid); }).join('') + '</div>' +
       '<div><div class="next-cd">' + fmtCD(diff) + '</div>' +
       '<div class="next-sub">' + plural(nb, 'garage') + '</div></div>';
+    const names = [];
+    first.forEach(function(d){ garagesFor(d.cid, d.time).forEach(function(n){ if(names.indexOf(n) === -1) names.push(n); }); });
+    renderTicker(first[0].time, names.sort(function(a,b){ return a.localeCompare(b); }));
     upcoming.splice(0, first.length);
   } else {
+    renderTicker('', []);
     nextEl.className = 'next';
     nextEl.innerHTML =
       '<div class="label">Prochain départ</div>' +
