@@ -699,6 +699,34 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 .admin-btn:hover { opacity: .85; }
 .admin-btn.danger { background: var(--red); color: #fff; }
 
+/* ── ÉQUIPE : prénom au premier lancement + liste dans l'admin ── */
+.name-overlay {
+  display: none; position: fixed; inset: 0; z-index: 600;
+  background: rgba(10,8,8,.92); align-items: center; justify-content: center; padding: 20px;
+}
+.name-overlay.show { display: flex; }
+.name-box {
+  width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 26px 22px;
+}
+.name-box h2 { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 2px; }
+.name-box p { color: var(--muted); font-size: 14px; margin: 6px 0 18px; line-height: 1.5; }
+.name-box input {
+  width: 100%; background: var(--surface2); border: 2px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 18px; padding: 12px 14px; outline: none;
+}
+.name-box input:focus { border-color: var(--accent); }
+.name-box .admin-btn { margin-top: 14px; }
+.me-line { margin: 10px 20px 0; text-align: center; font-size: 12px; color: var(--muted); }
+.me-line button {
+  background: none; border: none; color: var(--muted); text-decoration: underline;
+  font-family: inherit; font-size: inherit; cursor: pointer; padding: 4px;
+}
+.team-item { display: flex; align-items: center; gap: 10px; }
+.team-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted2); flex-shrink: 0; }
+.team-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.team-when { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
 .admin-garage-list {
   display: flex;
   flex-direction: column;
@@ -824,6 +852,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 <a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
 <button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
 <div class="alert-msg" id="alertMsg"></div>
+<div class="me-line" id="meLine"></div>
 
 <div class="search-wrap">
   <div class="search-box">
@@ -853,6 +882,15 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 </div>
 
 <!-- ADMIN PANEL -->
+<div class="name-overlay" id="nameOverlay">
+  <div class="name-box">
+    <h2>👋 Bienvenue</h2>
+    <p>Ton prénom, pour que l'équipe sache qui utilise l'app. On ne te le demandera qu'une fois.</p>
+    <input id="nameInput" placeholder="Ton prénom" maxlength="40" autocomplete="given-name" onkeydown="if(event.key==='Enter') saveName()">
+    <button class="admin-btn" onclick="saveName()">C'EST PARTI</button>
+  </div>
+</div>
+
 <div class="admin-overlay" id="adminOverlay">
   <div class="admin-box">
     <!-- LOGIN -->
@@ -872,8 +910,12 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
         <button class="admin-close" onclick="closeAdmin()">✕ FERMER</button>
       </div>
 
+      <!-- ÉQUIPE -->
+      <div class="admin-section-title">Équipe <span id="teamCount" style="color:var(--green)"></span></div>
+      <div class="admin-garage-list" id="teamList"><em style="color:var(--muted);font-size:12px">Chargement…</em></div>
+
       <!-- AJOUTER UN GARAGE -->
-      <div class="admin-section-title">Ajouter un garage</div>
+      <div class="admin-section-title" style="margin-top:28px">Ajouter un garage</div>
       <div class="admin-field">
         <label>Nom du garage</label>
         <input type="text" id="adminGarageName" placeholder="Ex: Garage Dupont">
@@ -1109,6 +1151,7 @@ window.enableAlerts = async function() {
     const sub = (await reg.pushManager.getSubscription()) ||
       (await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64urlToBytes(VAPID_PUBLIC)}));
     await savePushSubscription(sub);
+    supaRpc('team_link_push', {p_device: getDeviceId(), p_endpoint: sub.endpoint}).catch(function(){});
     setAlertUI(true, 'Tu recevras une alerte 5 min avant chaque départ (sauf le dimanche).');
     // Notification de confirmation, pour vérifier tout de suite que ça marche
     fetch(PUSH_FN, {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1119,6 +1162,55 @@ window.enableAlerts = async function() {
   }
 };
 
+// ── ÉQUIPE : prénom + présence (« qui est en ligne » dans l'admin) ───────────
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem('deviceId');
+    if(!id) {
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+      localStorage.setItem('deviceId', id);
+    }
+    return id;
+  } catch(e) { return null; }
+}
+function getMyName() { try { return localStorage.getItem('teamName') || ''; } catch(e) { return ''; } }
+
+async function teamPing() {
+  const id = getDeviceId(), name = getMyName();
+  if(!id || !name || document.hidden) return;
+  try { await supaRpc('team_ping', {p_device: id, p_name: name, p_user_agent: navigator.userAgent}); } catch(e) {}
+}
+
+function renderMeLine() {
+  const el = document.getElementById('meLine');
+  const name = getMyName();
+  el.innerHTML = name ? '👤 ' + name.replace(/</g, '&lt;') + ' · <button onclick="askName()">changer</button>' : '';
+}
+
+window.askName = function() {
+  const input = document.getElementById('nameInput');
+  input.value = getMyName();
+  document.getElementById('nameOverlay').classList.add('show');
+  setTimeout(function(){ input.focus(); }, 50);
+};
+
+window.saveName = function() {
+  const input = document.getElementById('nameInput');
+  const name = input.value.trim().replace(/\s+/g, ' ');
+  if(!name) { input.focus(); return; }
+  try { localStorage.setItem('teamName', name.charAt(0).toUpperCase() + name.slice(1)); } catch(e) {}
+  document.getElementById('nameOverlay').classList.remove('show');
+  renderMeLine();
+  teamPing();
+};
+
+(function() {
+  renderMeLine();
+  if(!getMyName()) window.askName(); else teamPing();
+  setInterval(teamPing, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) teamPing(); });
+})();
+
 // Au lancement : si déjà abonné, on le confirme (et on rafraîchit l'abonnement côté serveur)
 (async function() {
   try {
@@ -1128,7 +1220,9 @@ window.enableAlerts = async function() {
     const sub = reg && await reg.pushManager.getSubscription();
     if(!sub) return;
     setAlertUI(true, '');
-    savePushSubscription(sub).catch(function(){});
+    savePushSubscription(sub).then(function(){
+      return supaRpc('team_link_push', {p_device: getDeviceId(), p_endpoint: sub.endpoint});
+    }).catch(function(){});
   } catch(e) {}
 })();
 
@@ -1532,6 +1626,33 @@ function renderAll(){ renderHero(); renderTimeline(); renderCarriers(); renderTo
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 
+let teamTimer = null;
+
+function timeAgo(iso) {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if(min < 60) return 'vu il y a ' + Math.max(1, min) + ' min';
+  const h = Math.round(min / 60);
+  if(h < 24) return 'vu il y a ' + h + ' h';
+  const d = Math.round(h / 24);
+  return 'vu il y a ' + d + ' jour' + (d > 1 ? 's' : '');
+}
+
+async function renderTeam() {
+  const list = document.getElementById('teamList');
+  let team;
+  try { team = await supaRpc('admin_team', {p_password: adminSessionPwd}); }
+  catch(e) { list.innerHTML = '<em style="color:var(--muted);font-size:12px">Impossible de charger l\'équipe</em>'; return; }
+  const online = team.filter(function(m){ return m.online; }).length;
+  document.getElementById('teamCount').textContent = online ? '· ' + online + ' en ligne' : '';
+  list.innerHTML = team.length ? team.map(function(m){
+    return '<div class="admin-garage-item"><div class="team-item">' +
+      '<span class="team-dot' + (m.online ? ' on' : '') + '"></span>' +
+      '<div><div style="font-weight:600">' + String(m.name).replace(/</g, '&lt;') + '</div>' +
+      '<div class="team-when">' + (m.online ? 'En ligne' : timeAgo(m.last_seen)) + '</div></div></div>' +
+      '<div title="Alertes départ">' + (m.alerts ? '🔔' : '<span style="opacity:.3">🔕</span>') + '</div></div>';
+  }).join('') : '<em style="color:var(--muted);font-size:12px">Personne pour l\'instant</em>';
+}
+
 function openAdmin(){
   document.getElementById('adminOverlay').classList.add('show');
   document.getElementById('adminLogin').style.display = 'block';
@@ -1541,6 +1662,7 @@ function openAdmin(){
 }
 function closeAdmin(){
   adminSessionPwd = '';
+  clearInterval(teamTimer);
   document.getElementById('adminOverlay').classList.remove('show');
 }
 async function checkAdminPwd(){
@@ -1555,6 +1677,9 @@ async function checkAdminPwd(){
   }
   if(ok){
     adminSessionPwd = pwd;
+    renderTeam();
+    clearInterval(teamTimer);
+    teamTimer = setInterval(renderTeam, 30000);
     document.getElementById('adminLogin').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     renderAdminList();
