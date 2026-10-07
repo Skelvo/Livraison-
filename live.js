@@ -57,12 +57,14 @@ const LIVE = (function () {
 
   function applyCarriers(rows) {
     if (!Array.isArray(rows) || !rows.length) return;
-    const active = rows.filter(function (r) { return r.active; }).sort(function (a, b) { return a.sort - b.sort; });
+    // Livreurs Bellecave d'abord, puis transporteurs ; dans chaque catégorie, l'ordre choisi
+    const rank = function (r) { return (r.grp === 'bellecave' ? 0 : 1000) + (r.sort || 0); };
+    const active = rows.filter(function (r) { return r.active; }).sort(function (a, b) { return rank(a) - rank(b); });
     Object.keys(CARRIERS).forEach(function (k) { delete CARRIERS[k]; });
     Object.keys(CARRIER_DEPS).forEach(function (k) { delete CARRIER_DEPS[k]; });
     renames = {};
     active.forEach(function (r) {
-      CARRIERS[r.id] = { label: r.label, color: r.color };
+      CARRIERS[r.id] = { label: r.label, color: r.color, grp: r.grp || 'transporteur' };
       CARRIER_DEPS[r.id] = r.deps.slice();
     });
     rows.forEach(function (r) { renames[r.id] = r.renames || {}; });
@@ -90,7 +92,7 @@ const LIVE = (function () {
   // Recharge depuis le serveur ; renvoie true si les horaires ou les retards ont changé
   async function refresh() {
     try {
-      const rows = await get('carriers?select=id,label,deps,color,active,sort,renames&order=sort');
+      const rows = await get('carriers?select=id,label,deps,color,active,sort,renames,grp&order=sort');
       const day = today();
       const ev = await get('departure_events?select=carrier_id,dep_time,status,delay_min&day=eq.' + day);
       applyCarriers(rows);
@@ -126,6 +128,9 @@ const LIVE = (function () {
       return toMin(time) + (e && e.status === 'retard' ? e.delay : 0);
     },
     fmt: fmt,
+    GROUPS: [['bellecave', 'Bellecave'], ['transporteur', 'Transporteurs']],
+    // Identifiants des transporteurs actifs d'une catégorie, dans l'ordre d'affichage
+    ids: function (grp) { return Object.keys(CARRIERS).filter(function (k) { return (CARRIERS[k].grp || 'transporteur') === grp; }); },
     toMin: toMin,
   };
 })();

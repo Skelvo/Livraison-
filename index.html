@@ -401,6 +401,10 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
   border-radius: 4px;
   overflow: hidden;
 }
+.carrier-group-title {
+  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--muted); background: var(--surface2); padding: 8px 18px; border-bottom: 1px solid var(--border);
+}
 .carrier-row {
   display: flex;
   align-items: center;
@@ -753,6 +757,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 .car-head input[type=color] { width: 36px; height: 34px; border: none; background: none; padding: 0; }
 .car-head label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .car-times { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.car-grp { margin-top: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 6px; font-size: 12px; font-family: 'DM Mono', monospace; }
 .car-time { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
 .car-time input { width: 64px; background: none; border: none; color: var(--text); padding: 6px; font-family: 'DM Mono', monospace; font-size: 14px; text-align: center; }
 .car-time button, .car-add-time { background: none; border: none; color: var(--muted); padding: 4px 8px; cursor: pointer; font-size: 14px; }
@@ -913,7 +918,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 </div>
 
 <div class="carriers-section">
-  <div class="section-label">Transporteurs</div>
+  <div class="section-label">Livreurs & transporteurs</div>
   <div class="carriers-list" id="carriersList"></div>
 </div>
 
@@ -1564,7 +1569,13 @@ function renderCarriers(){
   });
 
   const list = document.getElementById('carriersList');
-  list.innerHTML = Object.keys(CARRIERS).map(function(cid){
+  // Deux catégories : livreurs Bellecave en haut, transporteurs ensuite
+  list.innerHTML = LIVE.GROUPS.map(function(gr){
+    const ids = LIVE.ids(gr[0]);
+    return ids.length ? '<div class="carrier-group-title">' + gr[1] + '</div>' + ids.map(carrierRowHtml).join('') : '';
+  }).join('');
+
+  function carrierRowHtml(cid){
     const c = CARRIERS[cid];
     const deps = CARRIER_DEPS[cid] || [];
     const depMins = deps.map(function(d){ return LIVE.effMin(cid, d); }).filter(function(t){ return t !== null; });
@@ -1622,7 +1633,7 @@ function renderCarriers(){
       '<div class="carrier-garages-panel" id="panel-' + cid + '">' +
       '<div class="carrier-garages-inner">' + garageTagsHtml + '</div>' +
       '</div>';
-  }).join('');
+  }
 }
 
 // Clock
@@ -1737,13 +1748,17 @@ function checkNewEvents(){
 function renderCarrierChecks(){
   [['adminCarriersCheck','chk-','deps-'], ['editCarriersCheck','echk-','edeps-']].forEach(function(f){
     const box = document.getElementById(f[0]);
-    box.innerHTML = Object.keys(CARRIERS).map(function(cid){
+    box.innerHTML = LIVE.GROUPS.map(function(gr){
+      const ids = LIVE.ids(gr[0]);
+      return ids.length ? '<div class="stat-sub" style="margin:8px 0 4px">' + gr[1] + '</div>' + ids.map(checkRow).join('') : '';
+    }).join('');
+    function checkRow(cid){
       return '<div class="admin-carrier-row">' +
         '<input type="checkbox" id="' + f[1] + cid + '">' +
         '<label class="admin-carrier-label" for="' + f[1] + cid + '">' + CARRIERS[cid].label + '</label>' +
         '<input class="admin-carrier-deps" id="' + f[2] + cid + '" placeholder="' + (CARRIER_DEPS[cid] || []).join(',') + '" disabled>' +
         '</div>';
-    }).join('');
+    }
     Object.keys(CARRIERS).forEach(function(cid){
       const chk = document.getElementById(f[1] + cid), deps = document.getElementById(f[2] + cid);
       chk.onchange = function(){ deps.disabled = !chk.checked; };
@@ -1863,6 +1878,8 @@ function carrierCard(r, i){
       '<input type="text" value="' + String(r.label).replace(/"/g, '&quot;') + '" placeholder="Nom du transporteur">' +
       '<label><input type="checkbox"' + (r.active ? ' checked' : '') + '> actif</label>' +
     '</div>' +
+    '<select class="car-grp"><option value="bellecave"' + (r.grp === 'bellecave' ? ' selected' : '') + '>Bellecave</option>' +
+      '<option value="transporteur"' + (r.grp !== 'bellecave' ? ' selected' : '') + '>Transporteur</option></select>' +
     '<div class="car-times">' + times +
       '<button class="car-add-time" onclick="addTimeInput(this)">+ horaire</button></div>' +
     '<button class="admin-btn" onclick="saveCarrier(' + i + ')">ENREGISTRER</button>' +
@@ -1879,13 +1896,17 @@ function addTimeInput(btn){
 
 async function renderCarrierEditor(){
   const box = document.getElementById('carrierEditor');
-  try { carrierRows = await supaFetch('carriers?select=id,label,deps,color,active,sort&order=sort'); }
+  try { carrierRows = await supaFetch('carriers?select=id,label,deps,color,active,sort,grp&order=sort'); }
   catch(e) { box.innerHTML = '<em style="color:var(--muted);font-size:12px">Hors ligne : impossible de modifier les horaires</em>'; return; }
-  box.innerHTML = carrierRows.map(carrierCard).join('');
+  carrierRows.sort(function(a, b){ return ((a.grp === 'bellecave' ? 0 : 1000) + a.sort) - ((b.grp === 'bellecave' ? 0 : 1000) + b.sort); });
+  box.innerHTML = LIVE.GROUPS.map(function(gr){
+    const html = carrierRows.map(function(r, i){ return (r.grp || 'transporteur') === gr[0] ? carrierCard(r, i) : ''; }).join('');
+    return html ? '<div class="stat-sub" style="margin:14px 0 8px">' + gr[1] + '</div>' + html : '';
+  }).join('');
 }
 
 function addCarrierRow(){
-  carrierRows.push({id: '', label: '', deps: [], color: '#40c0e0', active: true});
+  carrierRows.push({id: '', label: '', deps: [], color: '#40c0e0', active: true, grp: 'transporteur'});
   const box = document.getElementById('carrierEditor');
   box.insertAdjacentHTML('beforeend', carrierCard(carrierRows[carrierRows.length - 1], carrierRows.length - 1));
   box.lastElementChild.querySelector('input[type=text]').focus();
@@ -1915,6 +1936,7 @@ async function saveCarrier(i){
   try {
     await supaRpc('admin_save_carrier', {p_password: adminSessionPwd, p_id: id, p_label: label, p_deps: deps,
       p_color: card.querySelector('input[type=color]').value, p_active: card.querySelector('input[type=checkbox]').checked, p_renames: renames});
+    await supaRpc('admin_set_carrier_group', {p_password: adminSessionPwd, p_id: id, p_grp: card.querySelector('.car-grp').value});
     await LIVE.refresh();
     renderAllKeepOpen();
     renderCarrierChecks();
