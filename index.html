@@ -1350,7 +1350,12 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
   renderMeLine();
   if(!getMyName()) window.askName(); else teamPing();
   setInterval(teamPing, 60000);
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) teamPing(); });
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) return;
+    teamPing();
+    // App rouverte : on recharge tout de suite au lieu d'afficher des infos d'avant la mise en veille
+    LIVE.refresh().then(function(){ renderAllKeepOpen(); checkNewEvents(); });
+  });
 })();
 
 // Au lancement : si déjà abonné, on le confirme (et on rafraîchit l'abonnement côté serveur)

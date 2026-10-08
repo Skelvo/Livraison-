@@ -14,7 +14,8 @@ const LIVE = (function () {
   let settings = {};     // réglages de l'admin (table app_settings), ex. prep_minutes
   let drivers = [];      // pointages des livreurs Bellecave aujourd'hui (table driver_log)
   let bellecave = [];    // tous les livreurs Bellecave, même pas encore actifs : [{id, label, color, active}]
-  let health = {};       // surveillance des alertes (table health) : { tick: date, send: {...} }
+  let health = {};
+  let healthAt = 0;      // quand la table health a été lue pour la dernière fois       // surveillance des alertes (table health) : { tick: date, send: {...} }
 
   function store(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
   function load(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
@@ -111,6 +112,7 @@ const LIVE = (function () {
         const hl = await get('health?select=key,at,info');
         health = {};
         hl.forEach(function (r) { health[r.key] = r; });
+        healthAt = Date.now();
       } catch (e) {}
       applyCarriers(rows);
       applyEvents(ev);
@@ -153,10 +155,11 @@ const LIVE = (function () {
     // Délai de préparation avant chaque départ (réglé dans l'admin), 0 = pas affiché
     prepMinutes: function () { return Math.max(0, parseInt(settings.prep_minutes || '0') || 0); },
     setting: function (k) { return settings[k]; },
-    // Minutes écoulées depuis le dernier passage du robot des alertes (null si inconnu)
+    // Retard du robot des alertes en minutes, mesuré au moment où on a lu la table health
+    // (null si inconnu ou si cette lecture date : téléphone en veille, app rouverte, hors ligne…)
     tickAge: function () {
-      if (!health.tick) return null;
-      return Math.round((Date.now() - new Date(health.tick.at).getTime()) / 60000);
+      if (!health.tick || Date.now() - healthAt > 3 * 60000) return null;
+      return Math.round((healthAt - new Date(health.tick.at).getTime()) / 60000);
     },
     health: function () { return health; },
     // Dernier pointage du jour de chaque livreur Bellecave : { id: {status:'parti'|'arrive', at} }
