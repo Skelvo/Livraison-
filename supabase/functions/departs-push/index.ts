@@ -8,6 +8,9 @@
 // - "backup"    sauvegarde JSON dans le stockage Supabase (pg_cron chaque lundi, ou l'admin)
 // - "backups"   liste des sauvegardes avec liens de téléchargement (mot de passe admin)
 //
+// Surveillance : chaque passage de "tick" est noté dans la table health (clé "tick"),
+// chaque envoi d'alertes aussi (clé "send"), pour que l'app détecte une panne.
+//
 // Les horaires viennent de la table carriers (modifiable dans l'admin) ; data.js sur GitHub
 // ne sert plus que de secours. Les retards et annulations du jour sont dans departure_events.
 import webpush from "npm:web-push@3.6.7";
@@ -126,7 +129,7 @@ const BACKUPS_KEPT = 12; // ~3 mois de sauvegardes hebdomadaires
 
 async function makeBackup() {
   const [garages, carriers, events] = await Promise.all([
-    db.from("garages").select("name,carriers,created_at").order("name"),
+    db.from("garages").select("name,carriers,phone,city,note,created_at").order("name"),
     db.from("carriers").select("*").order("sort"),
     db.from("departure_events").select("*").gte("day", new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10)),
   ]);
@@ -244,6 +247,7 @@ Deno.serve(async (req) => {
 
     if (body.action === "tick") {
       if (req.headers.get("x-cron-secret") !== cfg.cron_secret) return json({ error: "interdit" }, 403);
+      if (!body.at) await db.from("health").upsert({ key: "tick", at: new Date().toISOString(), info: {} });
       const now = parisNow();
       if (now.weekday === "Sat" || now.weekday === "Sun") return json({ skipped: "week-end" });
       if (holidays(parseInt(now.date)).has(now.date)) return json({ skipped: "jour férié" });
@@ -252,7 +256,36 @@ Deno.serve(async (req) => {
       const { data: evs } = await db.from("departure_events").select("carrier_id,dep_time,status,delay_min").eq("day", now.date);
       const evOf = (cid: string, t: string) => (evs ?? []).find((e) => e.carrier_id === cid && e.dep_time === t);
       // "at" (ex. "11h10") permet de tester un horaire précis
-      const target = (body.at ? parseTime(String(body.at)) : now.minutes) + MINUTES_BEFORE;
+      const nowMin = body.at ? parseTime(String(body.at)) : now.minutes;
+      const target = nowMin + MINUTES_BEFORE;
+
+      // Alerte « heure limite de préparation » (si activée dans l'admin)
+      const { data: settings } = await db.from("app_settings").select("key,value");
+      const setting = (k: string) => (settings ?? []).find((x) => x.key === k)?.value;
+      const prep = parseInt(setting("prep_minutes") ?? "0") || 0;
+      if (prep > 0 && setting("prep_alert") === "true") {
+        const prepping: { cid: string; t: number }[] = [];
+        for (const cid of Object.keys(schedule.deps)) {
+          for (const t of schedule.deps[cid]) {
+            const ev = evOf(cid, t);
+            if (ev?.status === "annule") continue;
+            const eff = parseTime(t) + (ev?.status === "retard" ? ev.delay_min : 0);
+            if (eff - prep === nowMin) prepping.push({ cid, t: eff });
+          }
+        }
+        if (prepping.length) {
+          const depTime = fmt(prepping[0].t);
+          const { error: dupPrep } = await db.from("push_sent").insert({ key: `${now.date}|prep|${depTime}` });
+          if (!dupPrep) {
+            const { data: subsP } = await db.from("push_subscriptions").select("endpoint,p256dh,auth");
+            await sendToAll(subsP ?? [], {
+              title: `📦 Heure limite de préparation — départ ${depTime}`,
+              body: prepping.map((x) => schedule.carriers[x.cid]?.label ?? x.cid).join(" · ") + ` (dans ${prep} min)`,
+              tag: `prep-${depTime}`,
+            });
+          }
+        }
+      }
       // Départs dont l'heure réelle (retard compris, annulés exclus) tombe dans 5 min
       const leaving: { cid: string; delayed: boolean }[] = [];
       for (const cid of Object.keys(schedule.deps)) {
@@ -277,6 +310,7 @@ Deno.serve(async (req) => {
         body: labels.join(" · "),
         tag: `dep-${time}`,
       });
+      await db.from("health").upsert({ key: "send", at: new Date().toISOString(), info: { time, ...r } });
       // Ménage : on ne garde que quelques jours d'historique
       await db.from("push_sent").delete().lt("sent_at", new Date(Date.now() - 7 * 864e5).toISOString());
       return json({ time, carriers: labels, ...r });

@@ -73,7 +73,7 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 @media (hover: none) { input, select, textarea { font-size: 16px !important; } }
 .sound-hint { display: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; background: var(--blue); color: #fff; }
 .sound-hint.show { display: block; }
-.offline-bar, .events-banner { display: none; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; line-height: 1.6; }
+.offline-bar, .events-banner, .health-bar { display: none; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; line-height: 1.6; }
 .offline-bar.show { display: block; background: var(--surface2); color: var(--muted); border-bottom: 1px solid var(--border); }
 .events-banner.show { display: block; background: rgba(245,144,32,.12); color: var(--orange); border-bottom: 1px solid rgba(245,144,32,.4); }
 .events-banner .ev-cancel { color: var(--red); }
@@ -323,6 +323,16 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   font-weight:600; font-size:16px; margin-bottom:8px;
   color: var(--text);
 }
+.result-city { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); font-weight:400; margin-left:6px; }
+.result-info { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin:-2px 0 8px; font-size:13px; }
+.result-info a { color:var(--accent); text-decoration:none; font-family:'DM Mono',monospace; }
+.result-note { color:var(--muted); font-style:italic; }
+.result-prep { font-family:'DM Mono',monospace; font-size:11px; color:var(--orange); margin-top:4px; }
+.fuzzy-label { padding:8px 16px; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid var(--border); }
+.health-bar.show { display:block; background:rgba(232,64,64,.12); color:var(--red); border-bottom:1px solid rgba(232,64,64,.4); }
+.health-ok { color:var(--green); } .health-ko { color:var(--red); }
+.install-btn { display:none; }
+.install-btn.show { display:block; }
 
 /* Prochain départ dans la fiche */
 .result-next {
@@ -885,6 +895,7 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 
 <div class="imminent-banner" id="imminentBanner"></div>
 <div class="offline-bar" id="offlineBar"></div>
+<div class="health-bar" id="healthBar"></div>
 <div class="sound-hint" id="soundHint" onclick="SOUND.unlock()">🔊 Touche ici pour activer le son des alertes</div>
 <div class="events-banner" id="eventsBanner"></div>
 
@@ -913,6 +924,7 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 </div>
 
 <a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
+<button class="alert-btn install-btn" id="installBtn" onclick="installApp()">📲 INSTALLER L'APP SUR CE TÉLÉPHONE</button>
 <button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
 <div class="alert-msg" id="alertMsg"></div>
 <div class="me-line" id="meLine"></div>
@@ -978,6 +990,20 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
       <div class="admin-section-title">Équipe <span id="teamCount" style="color:var(--green)"></span></div>
       <div class="admin-garage-list" id="teamList"><em style="color:var(--muted);font-size:12px">Chargement…</em></div>
 
+      <!-- ÉTAT DES ALERTES -->
+      <div class="admin-section-title" style="margin-top:28px">État des alertes</div>
+      <div class="admin-garage-list" id="healthBox" style="max-height:none"><em style="color:var(--muted);font-size:12px">Chargement…</em></div>
+
+      <!-- PRÉPARATION -->
+      <div class="admin-section-title" style="margin-top:28px">Heure limite de préparation</div>
+      <div class="admin-hint">Affiche « À préparer avant … » dans l'app et sur la télé, X minutes avant chaque départ. 0 = désactivé.</div>
+      <div class="admin-field" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="prepMinutes" min="0" max="180" step="5" style="width:90px"> <span style="color:var(--muted);font-size:13px">minutes avant le départ</span>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="prepAlert"> Envoyer aussi une alerte sur les téléphones à l'heure limite</label>
+      <button class="admin-btn" onclick="savePrepSettings()">ENREGISTRER</button>
+      <div class="admin-msg" id="prepMsg"></div>
+
       <!-- MESSAGE À L'ÉQUIPE -->
       <div class="admin-section-title" style="margin-top:28px">Message à toute l'équipe</div>
       <textarea class="admin-search" id="bcText" rows="2" maxlength="300" placeholder="Ex : Quai 2 bloqué ce matin" style="resize:vertical"></textarea>
@@ -1015,6 +1041,18 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
         <input type="text" id="adminGarageName" placeholder="Ex: Garage Dupont">
       </div>
       <div class="admin-field">
+        <label>Ville (facultatif)</label>
+        <input type="text" id="addCity" maxlength="60" placeholder="Ex: Anglet">
+      </div>
+      <div class="admin-field">
+        <label>Téléphone (facultatif)</label>
+        <input type="tel" id="addPhone" maxlength="40" placeholder="Ex: 05 59 00 00 00">
+      </div>
+      <div class="admin-field">
+        <label>Note (facultatif)</label>
+        <input type="text" id="addNote" maxlength="300" placeholder="Ex: livrer par l'arrière, fermé le mercredi">
+      </div>
+      <div class="admin-field">
         <label>Transporteurs & horaires de départ (séparer par virgule ex: 09h30,15h30)</label>
         <div class="admin-carriers-check" id="adminCarriersCheck"></div>
       </div>
@@ -1030,6 +1068,18 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
       <!-- EDIT MODAL -->
       <div class="admin-edit-modal" id="adminEditModal">
         <div class="admin-section-title" style="margin-top:0">Modifier le garage : <span id="editGarageName" style="color:var(--accent)"></span></div>
+      <div class="admin-field">
+        <label>Ville (facultatif)</label>
+        <input type="text" id="editCity" maxlength="60" placeholder="Ex: Anglet">
+      </div>
+      <div class="admin-field">
+        <label>Téléphone (facultatif)</label>
+        <input type="tel" id="editPhone" maxlength="40" placeholder="Ex: 05 59 00 00 00">
+      </div>
+      <div class="admin-field">
+        <label>Note (facultatif)</label>
+        <input type="text" id="editNote" maxlength="300" placeholder="Ex: livrer par l'arrière, fermé le mercredi">
+      </div>
         <div class="admin-carriers-check" id="editCarriersCheck"></div>
         <button class="admin-btn" onclick="adminSaveEdit()" style="margin-top:12px">ENREGISTRER</button>
         <button class="admin-btn danger" onclick="document.getElementById('adminEditModal').classList.remove('show')" style="margin-top:6px">ANNULER</button>
@@ -1123,6 +1173,15 @@ window.saveGarageToSupabase = async function(name, carriers) {
   } catch(e) {
     console.log('Supabase error:', e);
     alert('⚠️ « ' + name + ' » n\'a pas été enregistré en ligne : ' + e.message);
+  }
+};
+
+// Ville, téléphone, note (après l'enregistrement du garage lui‑même)
+window.saveGarageInfo = async function(name, info) {
+  try {
+    await supaRpc('admin_update_garage_info', {p_password: adminSessionPwd, p_name: name, p_phone: info.phone, p_city: info.city, p_note: info.note});
+  } catch(e) {
+    alert('⚠️ Infos de « ' + name + ' » non enregistrées : ' + e.message);
   }
 };
 
@@ -1289,7 +1348,7 @@ function applyGarageRows(data) {
   const list = data.map(function(row) {
     let carriers = [];
     try { carriers = JSON.parse(row.carriers) || []; } catch(e) {}
-    return LIVE.fixGarage({g: row.name, carriers: carriers});
+    return LIVE.fixGarage({g: row.name, carriers: carriers, phone: row.phone || '', city: row.city || '', note: row.note || ''});
   }).sort(function(a, b){ return a.g.localeCompare(b.g); });
   window.GARAGES_DATA_REF.length = 0;
   list.forEach(function(g){ window.GARAGES_DATA_REF.push(g); });
@@ -1297,7 +1356,7 @@ function applyGarageRows(data) {
 
 window.loadGaragesFromSupabase = async function() {
   try {
-    const data = await supaFetch('garages?select=name,carriers');
+    const data = await supaFetch('garages?select=name,carriers,phone,city,note');
     if(!Array.isArray(data)) return;
     try { localStorage.setItem('garages_cache', JSON.stringify(data)); } catch(e) {}
     applyGarageRows(data);
@@ -1322,6 +1381,46 @@ function fmtCD(diff){
   return Math.floor(diff/60)+'h'+String(diff%60).padStart(2,'0');
 }
 function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// Nombre de fautes entre deux mots (lettre en trop, en moins, changée ou inversée)
+function typos(a, b){
+  const m = a.length, n = b.length;
+  if(Math.abs(m - n) > 2) return 3;
+  let prev2 = null, prev = [], cur;
+  for(let j = 0; j <= n; j++) prev[j] = j;
+  for(let i = 1; i <= m; i++){
+    cur = [i];
+    for(let j = 1; j <= n; j++){
+      cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+      if(prev2 && i > 1 && j > 1 && a[i-1] === b[j-2] && a[i-2] === b[j-1]) cur[j] = Math.min(cur[j], prev2[j-2] + 1);
+    }
+    prev2 = prev; prev = cur;
+  }
+  return prev[n];
+}
+// Le texte tapé ressemble‑t‑il à un morceau du nom, malgré une ou deux fautes ?
+function fuzzyMatch(text, q){
+  const maxT = q.length >= 7 ? 2 : 1;
+  const words = text.split(/[^a-z0-9]+/).filter(Boolean);
+  const qw = q.split(/[^a-z0-9]+/).filter(Boolean);
+  if(!qw.length) return false;
+  // Chaque mot tapé doit ressembler au début d'un mot du nom
+  return qw.every(function(w){
+    if(w.length < 3) return words.some(function(x){ return x.indexOf(w) === 0; });
+    const tol = w.length >= 7 ? 2 : (w.length >= 4 ? 1 : 0);
+    return words.some(function(x){
+      if(x.indexOf(w) !== -1) return true;
+      if(!tol) return false;
+      for(let len = w.length - tol; len <= w.length + tol; len++){
+        if(len < 1 || len > x.length) continue;
+        if(typos(w, x.slice(0, len)) <= Math.min(tol, maxT)) return true;
+      }
+      return false;
+    });
+  });
+}
+// Heure limite de préparation pour un départ (minutes), ou null si le réglage est à 0
+function prepBefore(depMin){ const p = LIVE.prepMinutes(); return p ? depMin - p : null; }
 // Heures réelles de départ (retards compris, annulations retirées)
 function getDeps(c){ return c.deps.map(function(t){ return LIVE.effMin(c.id, t); }).filter(function(t){ return t !== null; }); }
 function nextDep(c){ const now=nowMin(), d=getDeps(c).filter(t=>t>now); return d.length ? Math.min(...d) : null; }
@@ -1463,7 +1562,8 @@ function buildResult(m){
     nextBlock = '<div class="result-next">' +
       '<div><div class="result-next-label">Prochain départ</div>' +
       '<div class="result-next-time">' + fmt(bestNext) + '</div>' +
-      '<div class="result-next-who">' + CARRIERS[bestCid].label + '</div></div>' +
+      '<div class="result-next-who">' + CARRIERS[bestCid].label + '</div>' +
+      (prepBefore(bestNext) !== null ? '<div class="result-prep">📦 À préparer avant ' + fmt(prepBefore(bestNext)) + '</div>' : '') + '</div>' +
       '<div class="result-next-countdown' + (isUrgent?' urgent':isSoon?' verysoon':'') + '">' + fmtCD(diff) + '</div>' +
       '</div>';
   } else {
@@ -1494,8 +1594,11 @@ function buildResult(m){
   }).join('');
 
   const safeName = m.g.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const info = (m.phone ? '<a href="tel:' + esc(m.phone.replace(/[^0-9+]/g, '')) + '" onclick="event.stopPropagation()">📞 ' + esc(m.phone) + '</a>' : '') +
+    (m.note ? '<span class="result-note">📝 ' + esc(m.note) + '</span>' : '');
   return '<div class="result-item" onclick="onResultClick(\'' + safeName + '\')">' +
-    '<div class="result-garage">' + m.g + '</div>' +
+    '<div class="result-garage">' + esc(m.g) + (m.city ? '<span class="result-city">📍 ' + esc(m.city) + '</span>' : '') + '</div>' +
+    (info ? '<div class="result-info">' + info + '</div>' : '') +
     nextBlock +
     '<div class="result-carriers">' + rows + '</div></div>';
 }
@@ -1508,8 +1611,14 @@ function doSearch(q){
   const nq = normalize(q.trim());
   if(!nq){ searchResults.style.display='none'; searchClear.style.display='none'; return; }
   searchClear.style.display = 'block';
-  const matches = GARAGES_DATA.filter(function(g){ return normalize(g.g).includes(nq); });
-  searchResults.innerHTML = matches.length ? matches.map(buildResult).join('') : '<div class="no-result">Aucun garage trouvé</div>';
+  const matches = GARAGES_DATA.filter(function(g){ return normalize(g.g).includes(nq) || (g.city && normalize(g.city).includes(nq)); });
+  // Rien trouvé tel quel : on tolère une ou deux fautes de frappe (ex. « Berouet » → « Berrouet »)
+  const close = (!matches.length && nq.length >= 4) ? GARAGES_DATA.filter(function(g){
+    return fuzzyMatch(normalize(g.g), nq) || (g.city && fuzzyMatch(normalize(g.city), nq));
+  }).slice(0, 15) : [];
+  searchResults.innerHTML = matches.length ? matches.map(buildResult).join('')
+    : close.length ? '<div class="fuzzy-label">Vous vouliez dire…</div>' + close.map(buildResult).join('')
+    : '<div class="no-result">Aucun garage trouvé</div>';
   searchResults.style.display = 'block';
 }
 function onResultClick(n){ incStat(n); renderTop(); searchInput.value=n; doSearch(n); }
@@ -1580,7 +1689,10 @@ function renderHero(){
   heroName.textContent = CARRIERS[best.cid].label;
   heroTime.textContent = fmt(best.t);
   heroCD.textContent = fmtCD(diff);
-  heroSub.textContent = LIVE.effMin(best.cid, best.d) !== parseTime(best.d) ? 'Retardé — prévu ' + best.d : '';
+  const subs = [];
+  if(LIVE.effMin(best.cid, best.d) !== parseTime(best.d)) subs.push('Retardé — prévu ' + best.d);
+  if(prepBefore(best.t) !== null) subs.push('📦 À préparer avant ' + fmt(prepBefore(best.t)));
+  heroSub.textContent = subs.join(' · ');
   heroName.className = 'hero-name' + (diff <= 15 ? ' imminent' : '');
   heroCD.className = 'hero-countdown' + (diff <= 15 ? ' imminent' : '');
 
@@ -2070,6 +2182,74 @@ async function backupNow(){
   } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.className = 'admin-msg err'; }
 }
 
+// ── ÉTAT DES ALERTES ─────────────────────────────────────────────────────────
+// Le robot passe chaque minute (table health, clé « tick ») ; « send » = dernier envoi d'alertes
+async function renderHealth(){
+  const box = document.getElementById('healthBox');
+  await LIVE.refresh();
+  const h = LIVE.health(), age = LIVE.tickAge();
+  const rows = [];
+  if(age === null) rows.push('<span class="health-ko">✕ Robot des alertes : jamais vu</span>');
+  else if(age <= 3) rows.push('<span class="health-ok">✓ Robot des alertes actif</span> <span style="color:var(--muted)">(dernier passage il y a ' + Math.max(0, age) + ' min)</span>');
+  else rows.push('<span class="health-ko">✕ Robot des alertes arrêté depuis ' + age + ' min</span>');
+  if(h.send){
+    const i = h.send.info || {};
+    const when = new Date(h.send.at).toLocaleString('fr-FR', {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    const ko = (i.sent || 0) === 0 && (i.failed || 0) > 0;
+    rows.push('<span class="' + (ko ? 'health-ko' : 'health-ok') + '">' + (ko ? '✕' : '✓') + ' Dernière alerte (' + esc(i.time || '') + ', ' + when + ')</span> <span style="color:var(--muted)">: ' +
+      (i.sent || 0) + ' reçue' + ((i.sent || 0) > 1 ? 's' : '') + (i.failed ? ', ' + i.failed + ' en échec' : '') + (i.removed ? ', ' + i.removed + ' téléphone' + (i.removed > 1 ? 's' : '') + ' désinscrit' + (i.removed > 1 ? 's' : '') : '') + '</span>');
+  } else rows.push('<span style="color:var(--muted)">Aucune alerte envoyée depuis la mise en place de la surveillance</span>');
+  box.innerHTML = rows.map(function(r){ return '<div class="admin-garage-item" style="display:block;font-size:13px">' + r + '</div>'; }).join('');
+}
+// Bandeau pour tout le monde si le robot ne tourne plus (alertes en panne)
+function renderHealthBar(){
+  const el = document.getElementById('healthBar');
+  const age = LIVE.tickAge();
+  if(navigator.onLine && age !== null && age > 10){
+    el.textContent = '⚠️ Les alertes départ ne fonctionnent pas en ce moment — surveille l\'heure !';
+    el.className = 'health-bar show';
+  } else el.className = 'health-bar';
+}
+
+// ── HEURE LIMITE DE PRÉPARATION ─────────────────────────────────────────────
+function loadPrepSettings(){
+  document.getElementById('prepMinutes').value = LIVE.prepMinutes();
+  document.getElementById('prepAlert').checked = LIVE.setting('prep_alert') === 'true';
+}
+async function savePrepSettings(){
+  const msg = document.getElementById('prepMsg');
+  const min = parseInt(document.getElementById('prepMinutes').value || '0');
+  const alertOn = document.getElementById('prepAlert').checked;
+  if(isNaN(min) || min < 0 || min > 180){ msg.textContent = 'Entre 0 et 180 minutes'; msg.className = 'admin-msg err'; return; }
+  try {
+    await supaRpc('admin_set_setting', {p_password: adminSessionPwd, p_key: 'prep_minutes', p_value: String(min)});
+    await supaRpc('admin_set_setting', {p_password: adminSessionPwd, p_key: 'prep_alert', p_value: alertOn ? 'true' : 'false'});
+    await LIVE.refresh();
+    renderAllKeepOpen();
+    msg.textContent = min ? '✓ « À préparer avant » affiché ' + min + ' min avant chaque départ' + (alertOn ? ', avec alerte' : '') : '✓ Heure limite désactivée';
+    msg.className = 'admin-msg ok';
+  } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.className = 'admin-msg err'; }
+}
+
+// ── INSTALLER L'APP (Android / Chrome) ──────────────────────────────────────
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  installPrompt = e;
+  document.getElementById('installBtn').classList.add('show');
+});
+window.addEventListener('appinstalled', function(){
+  installPrompt = null;
+  document.getElementById('installBtn').classList.remove('show');
+});
+async function installApp(){
+  if(!installPrompt) return;
+  installPrompt.prompt();
+  try { await installPrompt.userChoice; } catch(e) {}
+  installPrompt = null;
+  document.getElementById('installBtn').classList.remove('show');
+}
+
 // ── MESSAGE À L'ÉQUIPE ───────────────────────────────────────────────────────
 async function adminBroadcast(){
   const text = document.getElementById('bcText').value.trim();
@@ -2252,6 +2432,8 @@ async function checkAdminPwd(){
     renderCarrierEditor();
     renderStats();
     renderBackups();
+    renderHealth();
+    loadPrepSettings();
   } else {
     msg.textContent = 'Mot de passe incorrect';
     msg.className = 'admin-msg err';
@@ -2280,17 +2462,20 @@ function adminAddGarage(){
   if(exists){ msg.textContent = 'Ce garage existe déjà !'; msg.className = 'admin-msg err'; return; }
 
   // Add to local array
-  GARAGES_DATA.push({g: name, carriers: carriers});
+  const info = readInfo('add');
+  GARAGES_DATA.push({g: name, carriers: carriers, phone: info.phone, city: info.city, note: info.note});
   GARAGES_DATA.sort(function(a,b){ return a.g.localeCompare(b.g); });
 
-  // Save to Firebase
-  if(window.saveGarageToSupabase) window.saveGarageToSupabase(name, carriers);
+  if(window.saveGarageToSupabase) window.saveGarageToSupabase(name, carriers).then(function(){
+    if(info.phone || info.city || info.note) return window.saveGarageInfo(name, info);
+  });
 
   msg.textContent = '✓ ' + name + ' ajouté avec succès !';
   msg.className = 'admin-msg ok';
 
   // Reset form
   document.getElementById('adminGarageName').value = '';
+  ['addCity', 'addPhone', 'addNote'].forEach(function(id){ document.getElementById(id).value = ''; });
   Object.keys(CARRIERS).forEach(function(cid){
     document.getElementById('chk-'+cid).checked = false;
     document.getElementById('deps-'+cid).value = '';
@@ -2338,7 +2523,7 @@ function renderAdminList(){
     const carrierNames = g.carriers.map(function(c){ return CARRIERS[c.id]?CARRIERS[c.id].label:c.id; }).join(', ');
     const safeName = g.g.replace(/'/g,"\'");
     return '<div class="admin-garage-item">' +
-      '<div><div style="font-weight:600">' + g.g + '</div>' +
+      '<div><div style="font-weight:600">' + esc(g.g) + (g.city ? ' <span style="font-weight:400;color:var(--muted);font-size:12px">· ' + esc(g.city) + '</span>' : '') + '</div>' +
       '<div style="font-size:11px;color:var(--muted);font-family:DM Mono,monospace">' + carrierNames + '</div>' +
       garageIssues(g).map(function(i){ return '<div style="font-size:11px;color:var(--red)">⚠ ' + i + '</div>'; }).join('') + '</div>' +
       '<div>' +
@@ -2349,6 +2534,13 @@ function renderAdminList(){
 }
 
 // ── EDIT GARAGE ──────────────────────────────────────────────────────────────
+function readInfo(pre){
+  return {
+    city: document.getElementById(pre + 'City').value.trim(),
+    phone: document.getElementById(pre + 'Phone').value.trim(),
+    note: document.getElementById(pre + 'Note').value.trim()
+  };
+}
 var currentEditName = null;
 
 function adminEditGarage(name){
@@ -2357,6 +2549,9 @@ function adminEditGarage(name){
   if(!gd) return;
 
   document.getElementById('editGarageName').textContent = name;
+  document.getElementById('editCity').value = gd.city || '';
+  document.getElementById('editPhone').value = gd.phone || '';
+  document.getElementById('editNote').value = gd.note || '';
 
   // Reset all
   renderCarrierChecks();
@@ -2393,10 +2588,14 @@ function adminSaveEdit(){
 
   if(!carriers.length){ msg.textContent = 'Sélectionne au moins un transporteur'; msg.className = 'admin-msg err'; return; }
 
+  const info = readInfo('edit');
   const idx = GARAGES_DATA.findIndex(function(g){ return g.g === currentEditName; });
-  if(idx !== -1) GARAGES_DATA[idx].carriers = carriers;
+  if(idx !== -1){ GARAGES_DATA[idx].carriers = carriers; Object.assign(GARAGES_DATA[idx], info); }
 
-  if(window.saveGarageToSupabase) window.saveGarageToSupabase(currentEditName, carriers);
+  const savedName = currentEditName;
+  if(window.saveGarageToSupabase) window.saveGarageToSupabase(savedName, carriers).then(function(){
+    return window.saveGarageInfo(savedName, info);
+  });
 
   msg.textContent = '✓ ' + currentEditName + ' modifié !';
   msg.className = 'admin-msg ok';
@@ -2435,7 +2634,7 @@ document.getElementById('adminTrigger').addEventListener('click', function(){
 });
 
 function renderAllKeepOpen(){
-  renderHero(); renderTimeline(); renderTop(); checkNotifs();
+  renderHero(); renderTimeline(); renderTop(); checkNotifs(); renderHealthBar();
   renderCarriers();
   // Re-open panels that were open
   openPanels.forEach(function(cid){

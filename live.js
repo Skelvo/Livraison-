@@ -11,6 +11,8 @@ const LIVE = (function () {
   let renames = {};      // { carrierId: { ancienneHeure: nouvelleHeure } }
   let events = {};       // { 'carrierId|heure': { status, delay } }
   let lastSync = null;   // date de la dernière mise à jour réussie depuis le serveur
+  let settings = {};     // réglages de l'admin (table app_settings), ex. prep_minutes
+  let health = {};       // surveillance des alertes (table health) : { tick: date, send: {...} }
 
   function store(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
   function load(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
@@ -85,6 +87,7 @@ const LIVE = (function () {
   const cachedEv = load('live_events');
   if (cachedEv && cachedEv.day === today()) applyEvents(cachedEv.rows);
   lastSync = load('live_sync');
+  settings = load('live_settings') || {};
 
   // Signature de ce qui est affiché, pour savoir si un rafraîchissement a changé quelque chose
   let signature = JSON.stringify([cached, cachedEv && cachedEv.rows]);
@@ -95,13 +98,22 @@ const LIVE = (function () {
       const rows = await get('carriers?select=id,label,deps,color,active,sort,renames,grp&order=sort');
       const day = today();
       const ev = await get('departure_events?select=carrier_id,dep_time,status,delay_min&day=eq.' + day);
+      try {
+        const st = await get('app_settings?select=key,value');
+        settings = {};
+        st.forEach(function (r) { settings[r.key] = r.value; });
+        store('live_settings', settings);
+        const hl = await get('health?select=key,at,info');
+        health = {};
+        hl.forEach(function (r) { health[r.key] = r; });
+      } catch (e) {}
       applyCarriers(rows);
       applyEvents(ev);
       store('live_carriers', rows);
       store('live_events', { day: day, rows: ev });
       lastSync = new Date().toISOString();
       store('live_sync', lastSync);
-      const sig = JSON.stringify([rows, ev]);
+      const sig = JSON.stringify([rows, ev, settings]);
       const changed = sig !== signature;
       signature = sig;
       return changed;
@@ -128,6 +140,15 @@ const LIVE = (function () {
       return toMin(time) + (e && e.status === 'retard' ? e.delay : 0);
     },
     fmt: fmt,
+    // Délai de préparation avant chaque départ (réglé dans l'admin), 0 = pas affiché
+    prepMinutes: function () { return Math.max(0, parseInt(settings.prep_minutes || '0') || 0); },
+    setting: function (k) { return settings[k]; },
+    // Minutes écoulées depuis le dernier passage du robot des alertes (null si inconnu)
+    tickAge: function () {
+      if (!health.tick) return null;
+      return Math.round((Date.now() - new Date(health.tick.at).getTime()) / 60000);
+    },
+    health: function () { return health; },
     GROUPS: [['bellecave', 'Bellecave'], ['transporteur', 'Transporteurs']],
     // Identifiants des transporteurs actifs d'une catégorie, dans l'ordre d'affichage
     ids: function (grp) { return Object.keys(CARRIERS).filter(function (k) { return (CARRIERS[k].grp || 'transporteur') === grp; }); },

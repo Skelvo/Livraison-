@@ -103,6 +103,7 @@ body {
 
 /* ── RETARDS / ANNULATIONS ── */
 .late { color:var(--orange); font-weight:700; }
+.prep { color:var(--text); font-weight:700; }
 .pill .late { font-size:.85em; }
 .pill.cancelled { text-decoration:line-through; opacity:.7; }
 .row.cancelled { border-color:rgba(232,64,64,.5); }
@@ -288,6 +289,7 @@ function render(){
       '<div><div class="next-cd">' + fmtCD(diff) + '</div>' +
       '<div class="next-sub">' + plural(nb, 'garage') +
         first.filter(function(d){ return d.delay; }).map(function(d){ return ' · <span class="late">retard ' + d.delay + ' min (prévu ' + d.time + ')</span>'; }).join('') +
+        (LIVE.prepMinutes() ? ' · <span class="prep">📦 à préparer avant ' + LIVE.fmt(first[0].t - LIVE.prepMinutes()) + '</span>' : '') +
       '</div></div>';
     const names = [];
     first.forEach(function(d){ garagesFor(d.cid, d.time).forEach(function(n){ if(names.indexOf(n) === -1) names.push(n); }); });
