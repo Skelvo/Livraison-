@@ -1710,10 +1710,12 @@ const SOUND = (function(){
   }
   function ready(){ const c = audio(); return c && c.state === 'running'; }
   return {
-    // Activé par défaut sur ordinateur, coupé par défaut sur téléphone (la notification sonne déjà)
+    // Uniquement sur ordinateur : sur téléphone, la notification sonne déjà
+    mobile: /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
     enabled: function(){
+      if(this.mobile) return false;
       try { const v = localStorage.getItem('soundOn'); if(v !== null) return v === '1'; } catch(e) {}
-      return !/iPhone|iPad|iPod|Android/.test(navigator.userAgent);
+      return true;
     },
     set: function(on){ try { localStorage.setItem('soundOn', on ? '1' : '0'); } catch(e) {} renderSound(); },
     ready: ready,
@@ -1734,6 +1736,12 @@ const SOUND = (function(){
 })();
 
 function renderSound(){
+  // Sur téléphone : ni la ligne du son, ni le bandeau bleu
+  if(SOUND.mobile){
+    document.getElementById('soundLine').innerHTML = '';
+    document.getElementById('soundHint').className = 'sound-hint';
+    return;
+  }
   const on = SOUND.enabled();
   document.getElementById('soundLine').innerHTML = on
     ? '🔊 Son activé · <button onclick="SOUND.set(false)">couper</button> · <button onclick="SOUND.unlock();setTimeout(function(){SOUND.bips(true)},150)">bip départ</button> · <button onclick="SOUND.unlock();setTimeout(function(){SOUND.alerte(true)},150)">bip retard</button>'
