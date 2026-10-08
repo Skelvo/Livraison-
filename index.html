@@ -931,14 +931,6 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
   </div>
 </div>
 
-<a class="board-link driver-link" id="driverLink" href="livreur.html">🚚 MON ESPACE LIVREUR →</a>
-<a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
-<button class="alert-btn install-btn" id="installBtn" onclick="installApp()">📲 INSTALLER L'APP SUR CE TÉLÉPHONE</button>
-<button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
-<div class="alert-msg" id="alertMsg"></div>
-<div class="me-line" id="meLine"></div>
-<div class="me-line" id="soundLine"></div>
-
 <div class="search-wrap">
   <div class="search-box">
     <span class="search-icon">🔍</span>
@@ -965,6 +957,18 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 <div class="carriers-section">
   <div class="section-label">Livreurs & transporteurs</div>
   <div class="carriers-list" id="carriersList"></div>
+</div>
+
+<!-- Liens et réglages, en bas pour garder la recherche juste sous la journée -->
+<div class="bottom-actions">
+<a class="board-link driver-link" id="driverLink" href="livreur.html">🚚 MON ESPACE LIVREUR →</a>
+<a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
+<button class="alert-btn install-btn" id="installBtn" onclick="installApp()">📲 INSTALLER L'APP SUR CE TÉLÉPHONE</button>
+<button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
+<div class="alert-msg" id="alertMsg"></div>
+<div class="me-line" id="meLine"></div>
+<div class="me-line" id="soundLine"></div>
+
 </div>
 
 <div style="text-align:center;padding:16px 0 32px">
