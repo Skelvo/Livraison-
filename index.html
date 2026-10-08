@@ -331,16 +331,13 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 .fuzzy-label { padding:8px 16px; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid var(--border); }
 .health-bar.show { display:block; background:rgba(232,64,64,.12); color:var(--red); border-bottom:1px solid rgba(232,64,64,.4); }
 .health-ok { color:var(--green); } .health-ko { color:var(--red); }
-.drivers-box { margin: 16px 20px 0; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
-.drivers-box:empty { display:none; }
-.drivers-title { padding: 10px 14px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); }
-.driver-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); font-size:14px; }
-.driver-row:last-child { border-bottom:none; }
-.driver-st { font-family:'DM Mono',monospace; font-size:12px; text-align:right; }
+.drivers-section.empty { display:none; }
+.drivers-box { display:flex; flex-wrap:wrap; gap:8px 18px; }
+.driver-row { display:flex; align-items:center; gap:8px; font-size:13px; }
+.driver-st { font-family:'DM Mono',monospace; font-size:12px; }
 .driver-st.arrive { color:var(--green); } .driver-st.parti { color:var(--orange); } .driver-st.none { color:var(--muted); }
 .driver-link { display:none; }
 .driver-link.show { display:block; background:rgba(32,196,176,.12); border-color:rgba(32,196,176,.5); color:#20c4b0; }
-@media (min-width: 900px) { .drivers-box { max-width: 1100px; margin-left:auto; margin-right:auto; } }
 .team-driver { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:12px; padding:4px 2px; max-width:110px; }
 .install-btn { display:none; }
 .install-btn.show { display:block; }
@@ -936,7 +933,6 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 
 <a class="board-link driver-link" id="driverLink" href="livreur.html">🚚 MON ESPACE LIVREUR →</a>
 <a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
-<div class="drivers-box" id="driversBox"></div>
 <button class="alert-btn install-btn" id="installBtn" onclick="installApp()">📲 INSTALLER L'APP SUR CE TÉLÉPHONE</button>
 <button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
 <div class="alert-msg" id="alertMsg"></div>
@@ -959,6 +955,11 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 <div class="top-section">
   <div class="section-label">Les plus recherchés</div>
   <div id="topGarages"><em style="color:var(--muted);font-size:12px">Les garages les plus recherchés apparaîtront ici automatiquement...</em></div>
+</div>
+
+<div class="top-section drivers-section" id="driversSection">
+  <div class="section-label">Livreurs Bellecave</div>
+  <div class="drivers-box" id="driversBox"></div>
 </div>
 
 <div class="carriers-section">
@@ -2215,12 +2216,13 @@ function renderDrivers(){
   // « Essai » n'est visible que par celui qui teste
   const list = LIVE.bellecave().filter(function(r){ return (r.active || statuses[r.id]) && (r.id !== 'essai' || (me && me.id === 'essai')); });
   document.getElementById('driversBox').innerHTML = list.length
-    ? '<div class="drivers-title">Livreurs Bellecave</div>' + list.map(function(r){
+    ? list.map(function(r){
         const t = driverStatusText(statuses[r.id]);
         return '<div class="driver-row"><span class="carrier-pill pill-' + r.id + '">' + esc(r.label) + '</span><span class="driver-st ' + t.cls + '">' + t.txt + '</span></div>';
       }).join('')
     : '';
   // Bouton vers l'espace livreur, seulement pour les livreurs eux‑mêmes
+  document.getElementById('driversSection').classList.toggle('empty', !list.length);
   document.getElementById('driverLink').classList.toggle('show', !!me);
 }
 
