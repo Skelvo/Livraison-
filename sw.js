@@ -2,8 +2,8 @@
 // - affiche les alertes départ envoyées par la fonction Supabase departs-push, même app fermée
 // - garde une copie des pages pour que l'app s'ouvre sans réseau
 //   (réseau d'abord pour toujours avoir la dernière version, copie si hors ligne)
-const CACHE = 'departs-v1';
-const SHELL = ['./', 'index.html', 'departs.html', 'data.js', 'live.js', 'manifest.webmanifest', 'icon-192.png', 'icon-180.png'];
+const CACHE = 'departs-v2';
+const SHELL = ['./', 'index.html', 'departs.html', 'livreur.html', 'data.js', 'live.js', 'manifest.webmanifest', 'icon-192.png', 'icon-180.png'];
 
 self.addEventListener('install', function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(SHELL); }).catch(function(){}));

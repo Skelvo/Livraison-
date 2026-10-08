@@ -46,6 +46,11 @@ body {
   border:1px solid var(--border); border-radius:8px; padding:max(8px, calc(var(--u)*1)) max(12px, calc(var(--u)*1.8));
 }
 .back:hover { color:var(--text); border-color:var(--muted); }
+/* Livreurs Bellecave : au dépôt (vert) / en tournée (orange) */
+.drivers { display:flex; flex-wrap:wrap; justify-content:center; gap:calc(var(--u)*1) calc(var(--u)*2.4); align-self:center; flex:1; padding:0 calc(var(--u)*2); }
+.drv { font-family:'DM Mono',monospace; font-size:calc(var(--u)*2.4); white-space:nowrap; display:flex; align-items:center; gap:calc(var(--u)*1); }
+.drv .pill { font-size:calc(var(--u)*2.4); padding:calc(var(--u)*.3) calc(var(--u)*1.4); }
+.drv.arrive { color:var(--green); } .drv.parti { color:var(--orange); } .drv.none { color:var(--muted); }
 .top-clock { font-family:'DM Mono',monospace; font-size:calc(var(--u)*6); font-weight:500; }
 
 /* ── CORPS : prochain départ à gauche, suivants à droite ── */
@@ -149,6 +154,8 @@ body {
   .top { align-items:center; gap:12px; }
   .top-title { font-size:calc(var(--u)*4); }
   .top-clock { font-size:calc(var(--u)*4.5); }
+  .top { flex-wrap:wrap; }
+  .drivers { order:3; flex-basis:100%; justify-content:flex-start; padding:0; }
   .next { gap:calc(var(--u)*3); }
   .rows { overflow:visible; }
   .past { flex-wrap:wrap; white-space:normal; }
@@ -166,6 +173,7 @@ body {
       <div class="top-date" id="date"></div>
       </div>
     </div>
+    <div class="drivers" id="drivers"></div>
     <div class="top-clock" id="clock">--:--:--</div>
   </div>
 
@@ -267,7 +275,18 @@ function allDepartures(){
   return list.sort(function(a,b){ return a.t - b.t || CARRIERS[a.cid].label.localeCompare(CARRIERS[b.cid].label); });
 }
 
+function renderDrivers(){
+  const st = LIVE.driverStatus();
+  document.getElementById('drivers').innerHTML = LIVE.bellecave().filter(function(r){ return r.active || st[r.id]; }).map(function(r){
+    const d = st[r.id];
+    const cls = d ? d.status : 'none';
+    const txt = !d ? '—' : (d.status === 'parti' ? '🚚 parti ' : '🏠 au dépôt ') + LIVE.hhmm(d.at);
+    return '<div class="drv ' + cls + '"><span class="pill pill-' + r.id + '">' + r.label + '</span>' + txt + '</div>';
+  }).join('');
+}
+
 function render(){
+  renderDrivers();
   const now = nowMin();
   const deps = allDepartures();
   // Les annulés restent affichés (barrés) jusqu'à leur heure prévue, mais ne comptent jamais comme « prochain départ »

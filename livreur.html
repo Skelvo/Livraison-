@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Espace livreur</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0e0c0c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Page des livreurs Bellecave : deux gros boutons, rien d'autre */
+:root {
+  --bg: #0e0c0c;
+  --surface: #1a1616;
+  --border: #332a2a;
+  --red: #e84040;
+  --orange: #f59020;
+  --green: #40d490;
+  --text: #f2eeee;
+  --muted: #8a7878;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { touch-action:manipulation; }
+body {
+  background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif;
+  min-height:100vh; display:flex; flex-direction:column;
+  padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 20px);
+  max-width:560px; margin:0 auto;
+}
+.top { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+.back {
+  font-family:'DM Mono',monospace; font-size:13px; letter-spacing:.1em; color:var(--muted);
+  text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:8px 12px;
+}
+.clock { font-family:'DM Mono',monospace; font-size:20px; }
+.hello { font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:.06em; line-height:1; }
+.status {
+  margin:14px 0 18px; padding:16px; border-radius:12px; border:1px solid var(--border);
+  background:var(--surface); font-family:'DM Mono',monospace; font-size:16px; text-align:center;
+}
+.status.parti { color:var(--orange); border-color:rgba(245,144,32,.5); background:rgba(245,144,32,.1); }
+.status.arrive { color:var(--green); border-color:rgba(64,212,144,.5); background:rgba(64,212,144,.1); }
+.status.none { color:var(--muted); }
+.buttons { display:flex; flex-direction:column; gap:14px; flex:1; min-height:340px; }
+.big {
+  flex:1; border:none; border-radius:18px; cursor:pointer;
+  font-family:'Bebas Neue',sans-serif; font-size:52px; letter-spacing:.06em; line-height:1;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  transition:transform .08s, opacity .2s;
+}
+.big:active { transform:scale(.97); }
+.big small { font-family:'DM Mono',monospace; font-size:13px; letter-spacing:.1em; opacity:.85; }
+.big.go { background:var(--orange); color:#1a0e00; }
+.big.back-home { background:var(--green); color:#00140b; }
+/* Le bouton qui n'est pas la suite logique reste utilisable mais en retrait */
+.big.dim { opacity:.35; }
+.big:disabled { opacity:.5; }
+.msg { min-height:24px; margin-top:12px; text-align:center; font-family:'DM Mono',monospace; font-size:14px; }
+.msg.ok { color:var(--green); } .msg.err { color:var(--red); }
+.msg button { background:none; border:none; color:var(--muted); text-decoration:underline; font:inherit; margin-left:8px; cursor:pointer; }
+.history { margin-top:18px; border-top:1px solid var(--border); padding-top:12px; }
+.history h3 { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:.2em; color:var(--muted); font-weight:400; margin-bottom:8px; text-transform:uppercase; }
+.history div { font-family:'DM Mono',monospace; font-size:14px; padding:5px 0; color:var(--muted); }
+.history b { color:var(--text); font-weight:500; margin-right:10px; }
+.denied { text-align:center; margin-top:60px; color:var(--muted); line-height:1.6; }
+.denied b { color:var(--text); }
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="back" href="./">← Accueil</a>
+  <div class="clock" id="clock">--:--</div>
+</div>
+<div id="app"></div>
+
+<script src="data.js"></script>
+<script src="live.js"></script>
+<script>
+const SUPA_URL = 'https://aitbhskkwoqmoqfpogph.supabase.co';
+const SUPA_KEY = 'sb_publishable_84rSs3LwBpdWs4qbPd5zkA_dOh-ci4s';
+
+async function rpc(fn, args) {
+  const res = await fetch(SUPA_URL + '/rest/v1/rpc/' + fn, {
+    method: 'POST',
+    headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json'},
+    body: JSON.stringify(args || {})
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if(!res.ok) throw new Error((data && data.message) || ('erreur ' + res.status));
+  return data;
+}
+function store(k){ try { return localStorage.getItem(k) || ''; } catch(e) { return ''; } }
+const myName = store('teamName'), device = store('deviceId');
+let me = null, busy = false, undoTimer = null;
+
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function render(msgHtml, msgCls){
+  const app = document.getElementById('app');
+  me = LIVE.driverForName(myName);
+  if(!me || !device){
+    app.innerHTML = '<div class="denied">Cette page est réservée aux <b>livreurs Bellecave</b>.<br>' +
+      (myName ? 'Ton prénom dans l\'app : <b>' + esc(myName) + '</b>.' : 'Ouvre d\'abord l\'app et entre ton prénom.') + '</div>';
+    return;
+  }
+  const st = LIVE.driverStatus()[me.id];
+  const log = LIVE.driverLog(me.id);
+  const statusHtml = !st ? '<div class="status none">Pas encore pointé aujourd\'hui</div>'
+    : st.status === 'parti' ? '<div class="status parti">🚚 EN TOURNÉE depuis ' + LIVE.hhmm(st.at) + '</div>'
+    : '<div class="status arrive">🏠 AU DÉPÔT depuis ' + LIVE.hhmm(st.at) + '</div>';
+  // Suite logique : parti → rentrer ; au dépôt (ou rien) → partir
+  const nextIsArrive = st && st.status === 'parti';
+  app.innerHTML =
+    '<div class="hello">Salut ' + esc(me.label) + ' 👋</div>' +
+    statusHtml +
+    '<div class="buttons">' +
+      '<button class="big go' + (nextIsArrive ? ' dim' : '') + '" onclick="press(\'parti\')">🚚 JE PARS<small>je quitte le dépôt</small></button>' +
+      '<button class="big back-home' + (nextIsArrive ? '' : ' dim') + '" onclick="press(\'arrive\')">🏠 JE SUIS RENTRÉ<small>je suis au dépôt</small></button>' +
+    '</div>' +
+    '<div class="msg ' + (msgCls || '') + '" id="msg">' + (msgHtml || '') + '</div>' +
+    (log.length ? '<div class="history"><h3>Aujourd\'hui</h3>' + log.slice().reverse().map(function(d){
+      return '<div><b>' + LIVE.hhmm(d.at) + '</b>' + (d.status === 'parti' ? '🚚 parti' : '🏠 rentré') + '</div>';
+    }).join('') + '</div>' : '');
+}
+
+async function press(status){
+  if(busy) return;
+  busy = true;
+  document.querySelectorAll('.big').forEach(function(b){ b.disabled = true; });
+  try {
+    // S'assure que ce téléphone est bien connu (prénom enregistré) avant de pointer
+    const ok = await rpc('team_hello', {p_device: device, p_name: myName, p_user_agent: navigator.userAgent});
+    if(ok === false) throw new Error('ce téléphone a été retiré de l\'équipe, rouvre l\'app');
+    const r = await rpc('driver_set_status', {p_device: device, p_status: status});
+    if(navigator.vibrate) navigator.vibrate(80);
+    await LIVE.refresh();
+    busy = false;
+    render('✓ ' + (status === 'parti' ? 'Départ' : 'Retour') + ' enregistré à ' + LIVE.hhmm(r.at) + '<button onclick="undo()">annuler</button>', 'ok');
+    // Le lien « annuler » disparaît au bout de 15 minutes
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(function(){ render(); }, 15 * 60000);
+  } catch(e) {
+    busy = false;
+    render(navigator.onLine ? 'Erreur : ' + esc(e.message) : '📶 Pas de réseau — réessaie dans un instant', 'err');
+  }
+}
+
+async function undo(){
+  if(busy) return;
+  busy = true;
+  try {
+    const done = await rpc('driver_cancel_last', {p_device: device});
+    await LIVE.refresh();
+    busy = false;
+    render(done ? '↩︎ Annulé' : 'Rien à annuler', done ? 'ok' : 'err');
+  } catch(e) { busy = false; render('Erreur : ' + esc(e.message), 'err'); }
+}
+
+function tick(){
+  const d = new Date();
+  document.getElementById('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+tick(); setInterval(tick, 5000);
+render();
+LIVE.refresh().then(function(){ if(!busy && !document.getElementById('msg')?.textContent) render(); });
+setInterval(function(){
+  LIVE.refresh().then(function(changed){ if(changed && !busy && !document.getElementById('msg')?.textContent) render(); });
+}, 30000);
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+</script>
+</body>
+</html>

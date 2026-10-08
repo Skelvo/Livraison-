@@ -12,6 +12,8 @@ const LIVE = (function () {
   let events = {};       // { 'carrierId|heure': { status, delay } }
   let lastSync = null;   // date de la dernière mise à jour réussie depuis le serveur
   let settings = {};     // réglages de l'admin (table app_settings), ex. prep_minutes
+  let drivers = [];      // pointages des livreurs Bellecave aujourd'hui (table driver_log)
+  let bellecave = [];    // tous les livreurs Bellecave, même pas encore actifs : [{id, label, color, active}]
   let health = {};       // surveillance des alertes (table health) : { tick: date, send: {...} }
 
   function store(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
@@ -87,6 +89,9 @@ const LIVE = (function () {
   const cachedEv = load('live_events');
   if (cachedEv && cachedEv.day === today()) applyEvents(cachedEv.rows);
   lastSync = load('live_sync');
+  const cachedDr = load('live_drivers');
+  if (cachedDr && cachedDr.day === today()) drivers = cachedDr.rows;
+  if (cached) bellecave = cached.filter(function (r) { return r.grp === 'bellecave'; });
   settings = load('live_settings') || {};
 
   // Signature de ce qui est affiché, pour savoir si un rafraîchissement a changé quelque chose
@@ -109,11 +114,16 @@ const LIVE = (function () {
       } catch (e) {}
       applyCarriers(rows);
       applyEvents(ev);
+      bellecave = rows.filter(function (r) { return r.grp === 'bellecave'; });
+      try {
+        drivers = await get('driver_log?select=carrier_id,status,at&cancelled=eq.false&day=eq.' + day + '&order=at');
+        store('live_drivers', { day: day, rows: drivers });
+      } catch (e) {}
       store('live_carriers', rows);
       store('live_events', { day: day, rows: ev });
       lastSync = new Date().toISOString();
       store('live_sync', lastSync);
-      const sig = JSON.stringify([rows, ev, settings]);
+      const sig = JSON.stringify([rows, ev, settings, drivers]);
       const changed = sig !== signature;
       signature = sig;
       return changed;
@@ -149,6 +159,24 @@ const LIVE = (function () {
       return Math.round((Date.now() - new Date(health.tick.at).getTime()) / 60000);
     },
     health: function () { return health; },
+    // Dernier pointage du jour de chaque livreur Bellecave : { id: {status:'parti'|'arrive', at} }
+    driverStatus: function () {
+      const out = {};
+      drivers.forEach(function (d) { out[d.carrier_id] = { status: d.status, at: d.at }; });
+      return out;
+    },
+    driverLog: function (cid) { return drivers.filter(function (d) { return d.carrier_id === cid; }); },
+    bellecave: function () { return bellecave.slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); }); },
+    // Livreur Bellecave correspondant à un prénom (« Cédric », « damian b »…), ou null
+    driverForName: function (name) {
+      const n = (name || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (!n) return null;
+      return bellecave.find(function (r) {
+        const l = r.label.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return n === l || n.indexOf(l + ' ') === 0;
+      }) || null;
+    },
+    hhmm: function (iso) { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0'); },
     GROUPS: [['bellecave', 'Bellecave'], ['transporteur', 'Transporteurs']],
     // Identifiants des transporteurs actifs d'une catégorie, dans l'ordre d'affichage
     ids: function (grp) { return Object.keys(CARRIERS).filter(function (k) { return (CARRIERS[k].grp || 'transporteur') === grp; }); },

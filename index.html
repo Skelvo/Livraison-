@@ -331,6 +331,16 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 .fuzzy-label { padding:8px 16px; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid var(--border); }
 .health-bar.show { display:block; background:rgba(232,64,64,.12); color:var(--red); border-bottom:1px solid rgba(232,64,64,.4); }
 .health-ok { color:var(--green); } .health-ko { color:var(--red); }
+.drivers-box { margin: 16px 20px 0; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
+.drivers-box:empty { display:none; }
+.drivers-title { padding: 10px 14px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); }
+.driver-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); font-size:14px; }
+.driver-row:last-child { border-bottom:none; }
+.driver-st { font-family:'DM Mono',monospace; font-size:12px; text-align:right; }
+.driver-st.arrive { color:var(--green); } .driver-st.parti { color:var(--orange); } .driver-st.none { color:var(--muted); }
+.driver-link { display:none; }
+.driver-link.show { display:block; background:rgba(32,196,176,.12); border-color:rgba(32,196,176,.5); color:#20c4b0; }
+@media (min-width: 900px) { .drivers-box { max-width: 1100px; margin-left:auto; margin-right:auto; } }
 .install-btn { display:none; }
 .install-btn.show { display:block; }
 
@@ -923,7 +933,9 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
   </div>
 </div>
 
+<a class="board-link driver-link" id="driverLink" href="livreur.html">🚚 MON ESPACE LIVREUR →</a>
 <a class="board-link" href="departs.html">📋 VOIR TOUS LES DÉPARTS DU JOUR →</a>
+<div class="drivers-box" id="driversBox"></div>
 <button class="alert-btn install-btn" id="installBtn" onclick="installApp()">📲 INSTALLER L'APP SUR CE TÉLÉPHONE</button>
 <button class="alert-btn" id="alertBtn" onclick="enableAlerts()">🔔 ACTIVER LES ALERTES DÉPART</button>
 <div class="alert-msg" id="alertMsg"></div>
@@ -1310,6 +1322,7 @@ window.saveName = function() {
   try { localStorage.setItem('teamName', name.charAt(0).toUpperCase() + name.slice(1)); } catch(e) {}
   document.getElementById('nameOverlay').classList.remove('show');
   renderMeLine();
+  if(window.renderDrivers) renderDrivers();
   teamPing().then(relinkPush);
 };
 
@@ -2182,6 +2195,24 @@ async function backupNow(){
   } catch(e) { msg.textContent = 'Erreur : ' + e.message; msg.className = 'admin-msg err'; }
 }
 
+// ── LIVREURS BELLECAVE : au dépôt / en tournée ──────────────────────────────
+function driverStatusText(st){
+  if(!st) return {cls: 'none', txt: 'pas encore pointé'};
+  return st.status === 'parti' ? {cls: 'parti', txt: '🚚 En tournée depuis ' + LIVE.hhmm(st.at)} : {cls: 'arrive', txt: '🏠 Au dépôt depuis ' + LIVE.hhmm(st.at)};
+}
+function renderDrivers(){
+  const statuses = LIVE.driverStatus();
+  const list = LIVE.bellecave().filter(function(r){ return r.active || statuses[r.id]; });
+  document.getElementById('driversBox').innerHTML = list.length
+    ? '<div class="drivers-title">Livreurs Bellecave</div>' + list.map(function(r){
+        const t = driverStatusText(statuses[r.id]);
+        return '<div class="driver-row"><span class="carrier-pill pill-' + r.id + '">' + esc(r.label) + '</span><span class="driver-st ' + t.cls + '">' + t.txt + '</span></div>';
+      }).join('')
+    : '';
+  // Bouton vers l'espace livreur, seulement pour les livreurs eux‑mêmes
+  document.getElementById('driverLink').classList.toggle('show', !!LIVE.driverForName(getMyName()));
+}
+
 // ── ÉTAT DES ALERTES ─────────────────────────────────────────────────────────
 // Le robot passe chaque minute (table health, clé « tick ») ; « send » = dernier envoi d'alertes
 async function renderHealth(){
@@ -2634,7 +2665,7 @@ document.getElementById('adminTrigger').addEventListener('click', function(){
 });
 
 function renderAllKeepOpen(){
-  renderHero(); renderTimeline(); renderTop(); checkNotifs(); renderHealthBar();
+  renderHero(); renderTimeline(); renderTop(); checkNotifs(); renderHealthBar(); renderDrivers();
   renderCarriers();
   // Re-open panels that were open
   openPanels.forEach(function(cid){
