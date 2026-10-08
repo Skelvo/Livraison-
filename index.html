@@ -1309,6 +1309,8 @@ function normalize(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-
 // Heures réelles de départ (retards compris, annulations retirées)
 function getDeps(c){ return c.deps.map(function(t){ return LIVE.effMin(c.id, t); }).filter(function(t){ return t !== null; }); }
 function nextDep(c){ const now=nowMin(), d=getDeps(c).filter(t=>t>now); return d.length ? Math.min(...d) : null; }
+// Livreur sans horaires fixes (livreurs Bellecave du BAB) : on affiche qui livre, sans heure
+function noSchedule(cid){ return !(CARRIER_DEPS[cid] || []).length; }
 // « 15h30 » → « 15h30 (+20 min) » ou « 15h30 (annulé) »
 function depWithEvent(cid, t){
   const e = LIVE.event(cid, t);
@@ -1440,7 +1442,7 @@ function buildResult(m){
   const isUrgent = diff !== null && diff <= 15;
   const isSoon = diff !== null && diff <= 30;
 
-  let nextBlock;
+  let nextBlock, flexShown = false;
   if(bestNext !== null){
     nextBlock = '<div class="result-next">' +
       '<div><div class="result-next-label">Prochain départ</div>' +
@@ -1449,11 +1451,20 @@ function buildResult(m){
       '<div class="result-next-countdown' + (isUrgent?' urgent':isSoon?' verysoon':'') + '">' + fmtCD(diff) + '</div>' +
       '</div>';
   } else {
-    nextBlock = '<div class="result-next"><span style="color:var(--muted);font-size:12px;font-family:DM Mono,monospace">Plus de départ aujourd\'hui</span></div>';
+    const flex = m.carriers.filter(function(c){ return CARRIERS[c.id] && noSchedule(c.id); });
+    flexShown = flex.length > 0;
+    nextBlock = flex.length
+      ? '<div class="result-next"><div><div class="result-next-label">Livré par</div>' +
+        '<div class="result-next-who" style="font-size:18px;color:var(--text)">' + flex.map(function(c){ return CARRIERS[c.id].label; }).join(' · ') + '</div>' +
+        '<div style="color:var(--muted);font-size:12px;font-family:DM Mono,monospace;margin-top:4px">Bellecave · horaires variables</div></div></div>'
+      : '<div class="result-next"><span style="color:var(--muted);font-size:12px;font-family:DM Mono,monospace">Plus de départ aujourd\'hui</span></div>';
   }
 
   const rows = m.carriers.map(function(c){
     const carr = CARRIERS[c.id]; if(!carr) return '';
+    if(noSchedule(c.id)) return flexShown ? '' : '<div class="result-carrier-row">' +
+      '<span class="carrier-pill pill-' + c.id + '">' + carr.label + '</span>' +
+      '<span class="dep-times">Bellecave · horaires variables</span></div>';
     const st = carrierSt(c);
     let statusHtml = '';
     if(st.s === 'imminent') statusHtml = '<span class="dep-status s-urgent">🚨 ' + st.diff + ' min</span>';
@@ -1642,11 +1653,12 @@ function renderCarriers(){
     const isSoon = diff !== null && diff <= 30;
 
     let rowClass = '', statusText = '';
-    if(isDone){ rowClass = 'c-done'; statusText = 'Terminé'; }
+    if(noSchedule(cid)){ statusText = 'Horaires variables'; }
+    else if(isDone){ rowClass = 'c-done'; statusText = 'Terminé'; }
     else if(past.length > 0){ rowClass = 'c-active'; statusText = 'En tournée'; }
     else { statusText = ''; }
 
-    const pillsHtml = deps.map(function(d){
+    const pillsHtml = noSchedule(cid) ? '<span class="dep-pill dep-future" style="font-family:DM Mono,monospace;font-size:11px">horaires variables</span>' : deps.map(function(d){
       const t = LIVE.effMin(cid, d);
       const e = LIVE.event(cid, d);
       if(t === null) return '<span class="dep-pill dep-cancel">' + d + ' ✕</span>';
@@ -2269,6 +2281,7 @@ function garageIssues(g){
   if(!g.carriers.length) return ['aucun transporteur'];
   const out = [];
   g.carriers.forEach(function(c){
+    if(noSchedule(c.id)) return;
     if(!c.deps.length) out.push(CARRIERS[c.id].label + ' sans horaire');
     c.deps.forEach(function(t){
       if((CARRIER_DEPS[c.id] || []).indexOf(t) === -1) out.push(CARRIERS[c.id].label + ' ' + t + ' n\'existe pas');
