@@ -101,10 +101,10 @@ function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'
 
 function render(msgHtml, msgCls){
   const app = document.getElementById('app');
-  me = LIVE.driverForName(myName);
+  try { me = JSON.parse(store('myDriver') || 'null'); } catch(e) { me = null; }
   if(!me || !device){
     app.innerHTML = '<div class="denied">Cette page est réservée aux <b>livreurs Bellecave</b>.<br>' +
-      (myName ? 'Ton prénom dans l\'app : <b>' + esc(myName) + '</b>.' : 'Ouvre d\'abord l\'app et entre ton prénom.') + '</div>';
+      (myName ? 'Demande à l\'admin de te déclarer comme livreur (<b>' + esc(myName) + '</b>).' : 'Ouvre d\'abord l\'app et entre ton prénom.') + '</div>';
     return;
   }
   const st = LIVE.driverStatus()[me.id];
@@ -166,6 +166,11 @@ function tick(){
 }
 tick(); setInterval(tick, 5000);
 render();
+// Vérifie auprès du serveur quel livreur est lié à ce téléphone
+if(device) rpc('my_driver', {p_device: device}).then(function(d){
+  try { localStorage.setItem('myDriver', d ? JSON.stringify(d) : ''); } catch(e) {}
+  if(!busy) render();
+}).catch(function(){});
 LIVE.refresh().then(function(){ if(!busy && !document.getElementById('msg')?.textContent) render(); });
 setInterval(function(){
   LIVE.refresh().then(function(changed){ if(changed && !busy && !document.getElementById('msg')?.textContent) render(); });

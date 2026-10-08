@@ -167,15 +167,6 @@ const LIVE = (function () {
     },
     driverLog: function (cid) { return drivers.filter(function (d) { return d.carrier_id === cid; }); },
     bellecave: function () { return bellecave.slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); }); },
-    // Livreur Bellecave correspondant à un prénom (« Cédric », « damian b »…), ou null
-    driverForName: function (name) {
-      const n = (name || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (!n) return null;
-      return bellecave.find(function (r) {
-        const l = r.label.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return n === l || n.indexOf(l + ' ') === 0;
-      }) || null;
-    },
     hhmm: function (iso) { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0'); },
     GROUPS: [['bellecave', 'Bellecave'], ['transporteur', 'Transporteurs']],
     // Identifiants des transporteurs actifs d'une catégorie, dans l'ordre d'affichage

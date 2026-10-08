@@ -277,7 +277,7 @@ function allDepartures(){
 
 function renderDrivers(){
   const st = LIVE.driverStatus();
-  document.getElementById('drivers').innerHTML = LIVE.bellecave().filter(function(r){ return r.active || st[r.id]; }).map(function(r){
+  document.getElementById('drivers').innerHTML = LIVE.bellecave().filter(function(r){ return (r.active || st[r.id]) && r.id !== 'essai'; }).map(function(r){
     const d = st[r.id];
     const cls = d ? d.status : 'none';
     const txt = !d ? '—' : (d.status === 'parti' ? '🚚 parti ' : '🏠 au dépôt ') + LIVE.hhmm(d.at);
