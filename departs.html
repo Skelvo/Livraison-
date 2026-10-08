@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Tableau des départs</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0e0c0c">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* Écran télé : toutes les tailles suivent la taille de l'écran (vh / vw),
@@ -139,7 +142,7 @@ body {
 /* Écran en portrait (téléphone, télé tournée) : on empile */
 @media (orientation:portrait) {
   :root { --u: min(0.6vh, 1vw); }
-  body { overflow:auto; cursor:auto; }
+  body { overflow:auto; cursor:auto; padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
   .screen { height:auto; min-height:100vh; }
   .main { grid-template-columns:1fr; }
   .top { align-items:center; gap:12px; }
