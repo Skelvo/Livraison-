@@ -594,17 +594,30 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   background: rgba(0,0,0,0.85);
   z-index: 500;
   overflow-y: auto;
-  padding: 20px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Jamais sous l'heure / la batterie ni sous la barre du bas de l'iPhone */
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
 }
-.admin-overlay.show { display: block; }
+.admin-overlay.show { display: flex; flex-direction: column; }
 .admin-box {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
+  width: 100%;
   max-width: 600px;
-  margin: 0 auto;
+  /* centré à l'écran quand il est petit (connexion), défile normalement quand il est grand */
+  margin: auto;
   padding: 24px;
 }
+/* En-tête « ADMIN / FERMER » toujours visible en faisant défiler l'admin */
+#adminPanel > .admin-title {
+  position: sticky; top: -16px; z-index: 5;
+  background: var(--surface); margin: -24px -24px 16px; padding: 20px 24px 14px;
+  border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0;
+}
+/* La page derrière ne bouge plus quand une fenêtre est ouverte */
+body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 .admin-title {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 28px;
@@ -719,7 +732,8 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 /* ── ÉQUIPE : prénom au premier lancement + liste dans l'admin ── */
 .name-overlay {
   display: none; position: fixed; inset: 0; z-index: 600;
-  background: rgba(10,8,8,.92); align-items: center; justify-content: center; padding: 20px;
+  background: rgba(10,8,8,.92); align-items: center; justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 20px);
 }
 .name-overlay.show { display: flex; }
 .name-box {
@@ -2185,7 +2199,23 @@ async function removeTeam(i){
   renderTeam();
 }
 
+let lockedScrollY = 0;
+function lockScroll(){
+  if(document.body.classList.contains('scroll-locked')) return;
+  lockedScrollY = window.scrollY;
+  document.body.style.top = -lockedScrollY + 'px';
+  document.body.classList.add('scroll-locked');
+}
+function unlockScroll(){
+  if(!document.body.classList.contains('scroll-locked')) return;
+  document.body.classList.remove('scroll-locked');
+  document.body.style.top = '';
+  window.scrollTo(0, lockedScrollY);
+}
+
 function openAdmin(){
+  lockScroll();
+  document.getElementById('adminOverlay').scrollTop = 0;
   document.getElementById('adminOverlay').classList.add('show');
   document.getElementById('adminLogin').style.display = 'block';
   document.getElementById('adminPanel').style.display = 'none';
@@ -2193,6 +2223,7 @@ function openAdmin(){
   document.getElementById('adminLoginMsg').className = 'admin-msg';
 }
 function closeAdmin(){
+  unlockScroll();
   adminSessionPwd = '';
   clearInterval(teamTimer);
   document.getElementById('adminOverlay').classList.remove('show');
@@ -2214,6 +2245,7 @@ async function checkAdminPwd(){
     teamTimer = setInterval(renderTeam, 30000);
     document.getElementById('adminLogin').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
+    document.getElementById('adminOverlay').scrollTop = 0;
     renderAdminList();
     renderCarrierChecks();
     renderEventsAdmin();
