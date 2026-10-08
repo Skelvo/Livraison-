@@ -17,6 +17,8 @@ import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const MINUTES_BEFORE = 5;
+// Pas d'alerte automatique avant 8h00 : ni les prépas ni les vendeurs ne sont là, ça les réveillerait
+const FIRST_ALERT_MIN = 8 * 60;
 const SOURCES = [
   "https://raw.githubusercontent.com/Skelvo/Livraison-/main/data.js",
   "https://raw.githubusercontent.com/Skelvo/Livraison-/main/index.html",
@@ -258,6 +260,7 @@ Deno.serve(async (req) => {
       // "at" (ex. "11h10") permet de tester un horaire précis
       const nowMin = body.at ? parseTime(String(body.at)) : now.minutes;
       const target = nowMin + MINUTES_BEFORE;
+      if (nowMin < FIRST_ALERT_MIN) return json({ skipped: "avant 8h" });
 
       // Alerte « heure limite de préparation » (si activée dans l'admin)
       const { data: settings } = await db.from("app_settings").select("key,value");
