@@ -1192,7 +1192,24 @@ function getMyName() { try { return localStorage.getItem('teamName') || ''; } ca
 async function teamPing() {
   const id = getDeviceId(), name = getMyName();
   if(!id || !name || document.hidden) return;
-  try { await supaRpc('team_ping', {p_device: id, p_name: name, p_user_agent: navigator.userAgent}); } catch(e) {}
+  let ok = true;
+  try { ok = await supaRpc('team_hello', {p_device: id, p_name: name, p_user_agent: navigator.userAgent}); } catch(e) {}
+  // L'admin a retiré ce téléphone de la liste : nouvelle identité et on redemande le prénom
+  if(ok === false) {
+    try { localStorage.removeItem('teamName'); localStorage.removeItem('deviceId'); } catch(e) {}
+    renderMeLine();
+    window.askName();
+  }
+}
+
+// Relie les alertes (si activées) à l'identité actuelle du téléphone
+async function relinkPush() {
+  try {
+    if(!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    if(sub) await supaRpc('team_link_push', {p_device: getDeviceId(), p_endpoint: sub.endpoint});
+  } catch(e) {}
 }
 
 function renderMeLine() {
@@ -1215,7 +1232,7 @@ window.saveName = function() {
   try { localStorage.setItem('teamName', name.charAt(0).toUpperCase() + name.slice(1)); } catch(e) {}
   document.getElementById('nameOverlay').classList.remove('show');
   renderMeLine();
-  teamPing();
+  teamPing().then(relinkPush);
 };
 
 // Copie de l'app sur le téléphone pour l'ouvrir sans réseau (et réception des alertes)
@@ -2067,20 +2084,46 @@ function timeAgo(iso) {
   return 'vu il y a ' + d + ' jour' + (d > 1 ? 's' : '');
 }
 
+// Une ligne par prénom : sur iPhone, Safari et l'app installée comptent comme deux appareils
+let teamGroups = [];
 async function renderTeam() {
   const list = document.getElementById('teamList');
-  let team;
-  try { team = (await supaRpc('admin_team', {p_password: adminSessionPwd})) || []; }
+  let rows;
+  try { rows = (await supaRpc('admin_team_list', {p_password: adminSessionPwd})) || []; }
   catch(e) { list.innerHTML = '<em style="color:var(--muted);font-size:12px">Impossible de charger l\'équipe</em>'; return; }
-  const online = team.filter(function(m){ return m.online; }).length;
+  const byName = {};
+  rows.forEach(function(m){
+    const k = String(m.name).trim().toLowerCase();
+    const g = byName[k] || (byName[k] = {name: m.name, devices: [], kinds: [], online: false, alerts: false, last_seen: m.last_seen});
+    g.devices.push(m.device_id);
+    if(g.kinds.indexOf(m.device) === -1) g.kinds.push(m.device);
+    g.online = g.online || m.online;
+    g.alerts = g.alerts || m.alerts;
+    if(m.last_seen > g.last_seen) g.last_seen = m.last_seen;
+  });
+  teamGroups = Object.keys(byName).map(function(k){ return byName[k]; })
+    .sort(function(a, b){ return (b.online - a.online) || (b.last_seen > a.last_seen ? 1 : -1); });
+  const online = teamGroups.filter(function(m){ return m.online; }).length;
   document.getElementById('teamCount').textContent = online ? '· ' + online + ' en ligne' : '';
-  list.innerHTML = team.length ? team.map(function(m){
+  list.innerHTML = teamGroups.length ? teamGroups.map(function(m, i){
+    const n = m.devices.length;
     return '<div class="admin-garage-item"><div class="team-item">' +
       '<span class="team-dot' + (m.online ? ' on' : '') + '"></span>' +
       '<div><div style="font-weight:600">' + String(m.name).replace(/</g, '&lt;') + '</div>' +
-      '<div class="team-when">' + (m.online ? 'En ligne' : timeAgo(m.last_seen)) + '</div></div></div>' +
-      '<div title="Alertes départ">' + (m.alerts ? '🔔' : '<span style="opacity:.3">🔕</span>') + '</div></div>';
+      '<div class="team-when">' + (m.online ? 'En ligne' : timeAgo(m.last_seen)) +
+        (n > 1 ? ' · ' + n + ' accès (' + m.kinds.join(', ') + ')' : '') + '</div></div></div>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<span title="Alertes départ">' + (m.alerts ? '🔔' : '<span style="opacity:.3">🔕</span>') + '</span>' +
+        '<button onclick="removeTeam(' + i + ')" title="Retirer">✕</button></div></div>';
   }).join('') : '<em style="color:var(--muted);font-size:12px">Personne pour l\'instant</em>';
+}
+
+async function removeTeam(i){
+  const m = teamGroups[i];
+  if(!m || !confirm('Retirer « ' + m.name + ' » de la liste ?\nSon téléphone lui redemandera son prénom à la prochaine ouverture.')) return;
+  try { await supaRpc('admin_remove_team', {p_password: adminSessionPwd, p_devices: m.devices}); }
+  catch(e) { alert('Erreur : ' + e.message); }
+  renderTeam();
 }
 
 function openAdmin(){
