@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Départs Livraison</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -66,6 +66,9 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif
 }
 
 /* Heure en haut à droite, bien contrastée */
+/* Pas de zoom : ni double-tap, ni zoom automatique de l'iPhone sur les champs (< 16px) */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+@media (hover: none) { input, select, textarea { font-size: 16px !important; } }
 .sound-hint { display: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; background: var(--blue); color: #fff; }
 .sound-hint.show { display: block; }
 .offline-bar, .events-banner { display: none; font-family: 'DM Mono', monospace; font-size: 12px; padding: 9px 16px; text-align: center; line-height: 1.6; }
@@ -1235,6 +1238,10 @@ window.saveName = function() {
   teamPing().then(relinkPush);
 };
 
+// Bloque le zoom à deux doigts (Safari iPhone ignore user-scalable=no)
+['gesturestart', 'gesturechange'].forEach(function(ev){ document.addEventListener(ev, function(e){ e.preventDefault(); }, {passive: false}); });
+document.addEventListener('touchmove', function(e){ if(e.touches.length > 1) e.preventDefault(); }, {passive: false});
+
 // Copie de l'app sur le téléphone pour l'ouvrir sans réseau (et réception des alertes)
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
 
@@ -1360,13 +1367,43 @@ if(window.Notification && Notification.permission === 'default') Notification.re
 
 // Stats
 function getStats(){ try{ return JSON.parse(localStorage.getItem('gs_v4') || '{}'); } catch(e){ return {}; } }
-function incStat(n){ 
+// Comptage des recherches, une seule fois par recherche :
+// - le compteur total +1 dès que la personne a tapé quelque chose qui trouve au moins un garage
+//   (après une petite pause de frappe, pour ne pas compter chaque lettre) ;
+// - un garage +1 quand il est le seul résultat, ou quand on touche sa fiche / sa pastille.
+// Une « recherche » se termine quand le champ est vidé ou après 20 s sans taper.
+const SEARCH_PAUSE = 1200, SEARCH_SESSION = 20000;
+let searchCounted = false, garagesCounted = [], searchTimer = null, sessionTimer = null;
+
+function newSearchSession(){ searchCounted = false; garagesCounted = []; }
+function countSearch(){
+  if(searchCounted) return;
+  searchCounted = true;
+  if(window.incTotalSearchCount) window.incTotalSearchCount();
+  setTimeout(updateTotalCount, 800);
+}
+function countGarage(n){
+  countSearch();
+  if(garagesCounted.indexOf(n) !== -1) return;
+  garagesCounted.push(n);
   const s=getStats(); s[n]=(s[n]||0)+1; localStorage.setItem('gs_v4', JSON.stringify(s));
   if(window.incStatShared) window.incStatShared(n);
   supaRpc('log_search', {p_name: n, p_device: getDeviceId()}).catch(function(){});
-  if(window.incTotalSearchCount) window.incTotalSearchCount();
-  updateTotalCount();
+  renderTop();
 }
+function onSearchTyping(q){
+  clearTimeout(searchTimer); clearTimeout(sessionTimer);
+  const nq = normalize(q.trim());
+  if(!nq){ newSearchSession(); return; }
+  searchTimer = setTimeout(function(){
+    const matches = GARAGES_DATA.filter(function(g){ return normalize(g.g).includes(nq); });
+    if(matches.length) countSearch();
+    if(matches.length === 1) countGarage(matches[0].g);
+  }, SEARCH_PAUSE);
+  sessionTimer = setTimeout(newSearchSession, SEARCH_SESSION);
+}
+// Garde le nom de l'ancienne fonction pour les clics (fiche, pastille, nom de garage)
+function incStat(n){ countGarage(n); }
 
 async function updateTotalCount(){
   if(!window.getTotalSearchCount) return;
@@ -1449,8 +1486,8 @@ function doSearch(q){
   searchResults.style.display = 'block';
 }
 function onResultClick(n){ incStat(n); renderTop(); searchInput.value=n; doSearch(n); }
-function clearSearch(){ searchInput.value=''; searchResults.style.display='none'; searchClear.style.display='none'; searchInput.focus(); }
-searchInput.addEventListener('input', function(e){ doSearch(e.target.value); });
+function clearSearch(){ newSearchSession(); searchInput.value=''; searchResults.style.display='none'; searchClear.style.display='none'; searchInput.focus(); }
+searchInput.addEventListener('input', function(e){ doSearch(e.target.value); onSearchTyping(e.target.value); });
 
 // Timeline tap support for mobile
 document.getElementById('timelinePoints').addEventListener('click', function(e){
